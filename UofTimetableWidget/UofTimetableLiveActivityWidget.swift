@@ -45,21 +45,23 @@ private struct ExpandedCourseView: View {
     let state: ClassActivityAttributes.ContentState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(state.courseCode)
-                .font(.system(size: 18, weight: .semibold, design: .default))
+        VStack(alignment: .leading, spacing: 6) {
+            Text(state.displayCourseCode)
+                .font(.system(size: 19, weight: .semibold, design: .default))
                 .foregroundStyle(ActivityStyle.primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.68)
 
-            Text(state.meetingCode)
-                .font(.system(size: 12, weight: .medium, design: .default))
-                .foregroundStyle(ActivityStyle.muted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+            if !state.expandedCourseSubtitle.isEmpty {
+                Text(state.expandedCourseSubtitle)
+                    .font(.system(size: 12, weight: .medium, design: .default))
+                    .foregroundStyle(ActivityStyle.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
         }
-        .frame(width: 118, alignment: .leading)
-        .padding(.leading, 18)
+        .frame(width: 122, alignment: .leading)
+        .padding(.leading, 20)
     }
 }
 
@@ -69,8 +71,8 @@ private struct ExpandedTimerView: View {
     var body: some View {
         VStack(spacing: 0) {
             Text(state.phaseLabel())
-                .font(.system(size: 12, weight: .medium, design: .default))
-                .foregroundStyle(ActivityStyle.muted)
+                .font(.system(size: 12, weight: .semibold, design: .default))
+                .foregroundStyle(ClassActivityTheme.color(for: state.countdownTarget()).accent)
                 .frame(width: 112, alignment: .center)
 
             ExpandedCountdownView(target: state.countdownTarget())
@@ -84,9 +86,9 @@ private struct ExpandedRoomView: View {
     let state: ClassActivityAttributes.ContentState
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 5) {
+        VStack(alignment: .trailing, spacing: 6) {
             Text(state.expandedLocationTitle)
-                .font(.system(size: 18, weight: .semibold, design: .default))
+                .font(.system(size: 19, weight: .semibold, design: .default))
                 .foregroundStyle(ActivityStyle.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
@@ -99,8 +101,8 @@ private struct ExpandedRoomView: View {
                     .minimumScaleFactor(0.75)
             }
         }
-        .frame(width: 118, alignment: .trailing)
-        .padding(.trailing, 18)
+        .frame(width: 122, alignment: .trailing)
+        .padding(.trailing, 20)
     }
 }
 
@@ -108,7 +110,7 @@ private struct ExpandedInfoRow: View {
     let state: ClassActivityAttributes.ContentState
 
     var body: some View {
-        Text(state.classTimeRange)
+        Text(state.expandedFooterText)
             .font(.system(size: 12, weight: .medium, design: .default))
             .foregroundStyle(ActivityStyle.muted)
             .lineLimit(1)
@@ -128,62 +130,132 @@ private struct LockScreenClassActivityView: View {
                 now: timeline.date
             )
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(context.state.courseCode)
-                            .font(.system(size: 22, weight: .semibold, design: .default))
-                            .foregroundStyle(ActivityStyle.primary)
-                            .lineLimit(1)
+            ZStack {
+                LockScreenActivityBackground()
 
-                        Text(context.state.meetingSummary)
-                            .font(.system(size: 12, weight: .medium, design: .default))
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(context.state.displayCourseCode)
+                                .font(.system(size: 23, weight: .semibold, design: .default))
+                                .foregroundStyle(ActivityStyle.primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+
+                            Text(context.state.meetingSummary)
+                                .font(.system(size: 12, weight: .medium, design: .default))
+                                .foregroundStyle(ActivityStyle.muted)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text(context.state.phaseLabel(now: timeline.date).uppercased())
+                                .font(.system(size: 11, weight: .bold, design: .default))
+                                .foregroundStyle(theme.accent)
+                                .tracking(0.6)
+
+                            LockScreenCountdownView(target: context.state.countdownTarget(now: timeline.date))
+                        }
+                        .frame(width: 118, alignment: .trailing)
+                    }
+
+                    HStack(alignment: .center, spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: context.state.locationIconName)
+                                .font(.system(size: 12, weight: .bold, design: .default))
+                                .foregroundStyle(theme.accent)
+
+                            Text(context.state.location)
+                                .font(.system(size: 18, weight: .semibold, design: .default))
+                                .foregroundStyle(ActivityStyle.primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(ActivityStyle.primary.opacity(0.075), in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(.white.opacity(0.05), lineWidth: 1)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Text(context.state.timeSummary(now: timeline.date))
+                            .font(.system(size: 13, weight: .medium, design: .default))
                             .foregroundStyle(ActivityStyle.muted)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.75)
+                            .minimumScaleFactor(0.82)
                     }
-
-                    Spacer(minLength: 8)
-
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(context.state.phaseLabel(now: timeline.date).uppercased())
-                            .font(.system(size: 11, weight: .bold, design: .default))
-                            .foregroundStyle(theme.accent)
-                            .frame(width: 128, alignment: .trailing)
-                        CountdownView(target: context.state.countdownTarget(now: timeline.date))
-                            .frame(width: 128, alignment: .trailing)
-                    }
-                    .frame(width: 128, alignment: .trailing)
                 }
-
-                HStack(alignment: .center, spacing: 10) {
-                    HStack(spacing: 7) {
-                        Image(systemName: context.state.locationIconName)
-                            .font(.system(size: 12, weight: .semibold, design: .default))
-                            .foregroundStyle(theme.accent)
-
-                        Text(context.state.location)
-                            .font(.system(size: 17, weight: .semibold, design: .default))
-                            .foregroundStyle(ActivityStyle.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(ActivityStyle.primary.opacity(0.08), in: Capsule())
-
-                    Spacer(minLength: 8)
-
-                    Text(context.state.timeSummary(now: timeline.date))
-                        .font(.system(size: 12, weight: .medium, design: .default))
-                        .foregroundStyle(ActivityStyle.muted)
-                        .lineLimit(1)
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 15)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 15)
             .activityBackgroundTint(theme.background)
             .activitySystemActionForegroundColor(theme.accent)
+        }
+    }
+}
+
+private struct LockScreenActivityBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    ActivityStyle.cardSurfaceTop,
+                    ActivityStyle.softNavy,
+                    ActivityStyle.cardSurfaceBottom
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [.white.opacity(0.055), .clear],
+                center: .topLeading,
+                startRadius: 18,
+                endRadius: 220
+            )
+
+            RadialGradient(
+                colors: [ActivityStyle.blue.opacity(0.10), .clear],
+                center: .topTrailing,
+                startRadius: 12,
+                endRadius: 185
+            )
+
+            LinearGradient(
+                colors: [.white.opacity(0.065), .clear, .black.opacity(0.08)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+    }
+}
+
+private struct LockScreenCountdownView: View {
+    let target: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            if target > timeline.date {
+                Text(timerInterval: timeline.date...target, countsDown: true)
+                    .font(.system(size: 20, weight: .bold, design: .default).monospacedDigit())
+                    .foregroundStyle(ActivityStyle.primary)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .frame(width: 82, alignment: .trailing)
+            } else {
+                Text("NOW")
+                    .font(.system(size: 20, weight: .bold, design: .default))
+                    .foregroundStyle(ActivityStyle.primary)
+                    .lineLimit(1)
+                    .frame(width: 82, alignment: .trailing)
+            }
         }
     }
 }
@@ -192,7 +264,7 @@ private struct CourseCodeView: View {
     let state: ClassActivityAttributes.ContentState
 
     var body: some View {
-        Text(state.courseCode)
+        Text(state.displayCourseCode)
             .font(.system(size: 17, weight: .semibold, design: .default))
             .foregroundStyle(ActivityStyle.primary)
             .lineLimit(1)
@@ -359,7 +431,11 @@ private enum ClassActivityTheme {
 
 private enum ActivityStyle {
     static let navy = Color(red: 0.0, green: 0.16, blue: 0.36)
-    static let softNavy = Color(red: 0.015, green: 0.075, blue: 0.15)
+    static let softNavy = Color(red: 0.010, green: 0.060, blue: 0.12)
+    static let cardTop = Color(red: 0.012, green: 0.095, blue: 0.18)
+    static let cardBottom = Color(red: 0.006, green: 0.045, blue: 0.10)
+    static let cardSurfaceTop = Color(red: 0.018, green: 0.074, blue: 0.135)
+    static let cardSurfaceBottom = Color(red: 0.006, green: 0.035, blue: 0.075)
     static let blue = Color(red: 0.0, green: 0.42, blue: 0.78)
     static let gold = Color(red: 0.98, green: 0.72, blue: 0.25)
     static let red = Color(red: 0.82, green: 0.16, blue: 0.20)

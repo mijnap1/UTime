@@ -15,16 +15,26 @@ struct ContentView: View {
     @Query(sort: \CourseEvent.startTime) private var courseEvents: [CourseEvent]
     @AppStorage("reminderLeadMinutes") private var reminderLeadMinutes = 30
     @AppStorage("alertCueMinutes") private var alertCueMinutes = 5
+    @AppStorage("hasCompletedProfileSetup") private var hasCompletedProfileSetup = false
+    @AppStorage("studentDisplayName") private var studentDisplayName = ""
+    @AppStorage("studentCampus") private var studentCampus = ""
+    @AppStorage("studentMajor") private var studentMajor = ""
+    @AppStorage("studentYear") private var studentYear = ""
 
     @State private var isImportingSchedule = false
-    @State private var statusMessage = "Import your U of T calendar to get started."
+    @State private var isShowingProfileSetup = false
+    @State private var toastMessage: String?
+    @State private var toastTask: Task<Void, Never>?
     @State private var islandTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
-                    AppHeaderView()
+                    AppHeaderView(
+                        hasSchedule: !courseEvents.isEmpty,
+                        profileName: studentDisplayName
+                    )
 
                     if let nextEvent = upcomingEvents.first {
                         NextClassCard(event: nextEvent)
@@ -32,7 +42,6 @@ struct ContentView: View {
 
                     ImportScheduleCard(
                         importedCount: courseEvents.count,
-                        statusMessage: statusMessage,
                         importAction: { isImportingSchedule = true }
                     )
 
@@ -52,6 +61,15 @@ struct ContentView: View {
             .background(AppTheme.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
+        .overlay(alignment: .top) {
+            if let toastMessage {
+                FloatingStatusToast(message: toastMessage)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.98)))
+                    .zIndex(1)
+            }
+        }
         .fileImporter(
             isPresented: $isImportingSchedule,
             allowedContentTypes: [calendarFileType],
@@ -61,6 +79,10 @@ struct ContentView: View {
         .onAppear {
             clampAlertCueMinutes()
             restartIslandScheduler()
+
+            if !hasCompletedProfileSetup {
+                isShowingProfileSetup = true
+            }
         }
         .onChange(of: reminderLeadMinutes) { _, newValue in
             reminderLeadMinutes = min(max(newValue, 1), 60)
@@ -69,6 +91,17 @@ struct ContentView: View {
         .onChange(of: alertCueMinutes) { _, newValue in
             alertCueMinutes = min(max(newValue, 1), 60)
             clampAlertCueMinutes()
+        }
+        .fullScreenCover(isPresented: $isShowingProfileSetup) {
+            OnboardingFlowView(
+                displayName: $studentDisplayName,
+                campus: $studentCampus,
+                major: $studentMajor,
+                year: $studentYear
+            ) {
+                hasCompletedProfileSetup = true
+                isShowingProfileSetup = false
+            }
         }
     }
 
@@ -93,11 +126,13 @@ struct ContentView: View {
 
             restartIslandScheduler(with: snapshots)
 
-            statusMessage = drafts.isEmpty
-                ? "No classes were found in that calendar."
-                : "Imported \(drafts.count) classes from \(url.lastPathComponent)."
+            showToast(
+                drafts.isEmpty
+                    ? "No classes were found in that calendar."
+                    : "Imported \(drafts.count) classes from \(url.lastPathComponent)."
+            )
         } catch {
-            statusMessage = "Could not import calendar: \(error.localizedDescription)"
+            showToast("Could not import calendar: \(error.localizedDescription)")
         }
     }
 
@@ -138,13 +173,13 @@ struct ContentView: View {
         Task {
             await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate)
         }
-        statusMessage = "Schedule cleared."
+        showToast("Schedule cleared.")
     }
 
     private func applyReminderSettings() {
         clampAlertCueMinutes()
         restartIslandScheduler()
-        statusMessage = "Live Activity timing updated."
+        showToast("Live Activity timing updated.")
     }
 
     private func restartIslandScheduler() {
@@ -226,9 +261,26 @@ struct ContentView: View {
                 compactCueMinutes: alertCueMinutes,
                 compactCountdownUntil: shouldShowCountdown ? event.startTime : nil
             )
-            statusMessage = "Dynamic Island is tracking \(event.courseCode)."
+            showToast("Dynamic Island is tracking \(event.courseCode).")
         } catch {
-            statusMessage = "Could not start Dynamic Island: \(error.localizedDescription)"
+            showToast("Could not start Dynamic Island: \(error.localizedDescription)")
+        }
+    }
+
+    private func showToast(_ message: String) {
+        toastTask?.cancel()
+
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            toastMessage = message
+        }
+
+        toastTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_800_000_000)
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.92)) {
+                toastMessage = nil
+            }
         }
     }
 
@@ -275,32 +327,642 @@ struct ContentView: View {
             alertCueMinutes = validOptions.max() ?? reminderLeadMinutes
         }
     }
+
+    private func startPrimaryFlow() {
+        if hasCompletedProfileSetup {
+            isImportingSchedule = true
+        } else {
+            isShowingProfileSetup = true
+        }
+    }
+
 }
 
 private struct AppHeaderView: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            Image("UofTimetableLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 50, height: 50)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .shadow(color: AppTheme.navy.opacity(0.10), radius: 12, y: 6)
+    let hasSchedule: Bool
+    let profileName: String
 
-            VStack(alignment: .leading, spacing: 2) {
+    var body: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 11) {
+                Image("UofTimetableLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 70, height: 70)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: AppTheme.navy.opacity(0.14), radius: 18, y: 10)
+
                 Text("UTime")
-                    .font(.system(size: 27, weight: .semibold, design: .default))
+                    .font(OnboardingFont.semibold(35))
                     .foregroundStyle(AppTheme.navy)
 
-                Text("UofT classes, rooms, and live alerts")
-                    .font(.system(size: 14, weight: .medium, design: .default))
+                Text("UofT classes, rooms, and live alerts.")
+                    .font(OnboardingFont.medium(16))
                     .foregroundStyle(AppTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+
+            Text(headerCopy)
+                .font(OnboardingFont.regular(14))
+                .foregroundStyle(AppTheme.secondaryText)
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+                .padding(.horizontal, 8)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            .white,
+                            AppTheme.cream.opacity(0.82),
+                            AppTheme.sky.opacity(0.72),
+                            AppTheme.background
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    ZStack {
+                        RadialGradient(
+                            colors: [AppTheme.blue.opacity(0.18), .clear],
+                            center: .bottomLeading,
+                            startRadius: 18,
+                            endRadius: 260
+                        )
+
+                        RadialGradient(
+                            colors: [AppTheme.navy.opacity(0.10), .clear],
+                            center: .topTrailing,
+                            startRadius: 8,
+                            endRadius: 230
+                        )
+
+                        LinearGradient(
+                            colors: [.white.opacity(0.82), .white.opacity(0.18), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AppTheme.border.opacity(0.8), lineWidth: 1)
+        }
+    }
+
+    private var headerCopy: String {
+        let trimmedName = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if hasSchedule, !trimmedName.isEmpty {
+            return "Ready for your next class, \(trimmedName). UTime keeps your schedule on this device."
+        }
+
+        return "Import your timetable once. UTime keeps your schedule on this device and brings the next class to your Lock Screen."
+    }
+}
+
+private struct OnboardingFlowView: View {
+    @Binding var displayName: String
+    @Binding var campus: String
+    @Binding var major: String
+    @Binding var year: String
+
+    let onComplete: () -> Void
+
+    @State private var hasStarted = false
+
+    var body: some View {
+        ZStack {
+            OnboardingBackground()
+
+            if hasStarted {
+                ProfileSetupView(
+                    displayName: $displayName,
+                    campus: $campus,
+                    major: $major,
+                    year: $year,
+                    onBack: {
+                        withAnimation(.spring(response: 0.48, dampingFraction: 0.88)) {
+                            hasStarted = false
+                        }
+                    },
+                    onComplete: onComplete
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                WelcomeOnboardingView {
+                    withAnimation(.spring(response: 0.48, dampingFraction: 0.88)) {
+                        hasStarted = true
+                    }
+                }
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+    }
+}
+
+private enum OnboardingFont {
+    static func regular(_ size: CGFloat) -> Font {
+        .custom("AvenirNext-Regular", size: size)
+    }
+
+    static func medium(_ size: CGFloat) -> Font {
+        .custom("AvenirNext-Medium", size: size)
+    }
+
+    static func semibold(_ size: CGFloat) -> Font {
+        .custom("AvenirNext-DemiBold", size: size)
+    }
+}
+
+private struct WelcomeOnboardingView: View {
+    let onGetStarted: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 42)
+
+            VStack(spacing: 16) {
+                Image("UofTimetableLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 96, height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: AppTheme.navy.opacity(0.16), radius: 28, y: 16)
+
+                VStack(spacing: 8) {
+                    Text("UTime")
+                        .font(OnboardingFont.medium(44))
+                        .foregroundStyle(AppTheme.navy)
+
+                    Text("Your U of T timetable, ready before class.")
+                        .font(OnboardingFont.regular(17))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+            }
+
+            Spacer(minLength: 48)
+
+            VStack(alignment: .leading, spacing: 14) {
+                WelcomeFeatureRow(systemImage: "calendar", title: "Import once", detail: ".ics schedules stay on your device.")
+                WelcomeFeatureRow(systemImage: "location.fill", title: "Find the room", detail: "Course and room show on the Lock Screen.")
+                WelcomeFeatureRow(systemImage: "timer", title: "Arrive on time", detail: "Live cues appear before class.")
+            }
+            .padding(18)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(.white.opacity(0.68), lineWidth: 1)
+            }
+            .shadow(color: AppTheme.navy.opacity(0.07), radius: 18, y: 12)
+
+            Spacer(minLength: 32)
+
+            VStack(spacing: 12) {
+                WelcomeActionButton(action: onGetStarted)
+
+                Text("No account needed.")
+                    .font(OnboardingFont.medium(13))
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            .padding(.bottom, 24)
+        }
+        .padding(.horizontal, 22)
+    }
+}
+
+private struct WelcomeActionButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 17, weight: .medium, design: .default))
+
+                Text("Get Started")
+                    .font(OnboardingFont.medium(17))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [AppTheme.blue, AppTheme.blue.opacity(0.92)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(.white.opacity(0.18), lineWidth: 1)
+            }
+            .shadow(color: AppTheme.blue.opacity(0.20), radius: 14, y: 8)
+        }
+        .buttonStyle(PressableButtonStyle())
+    }
+}
+
+private struct PressableButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.spring(response: 0.22, dampingFraction: 0.82), value: configuration.isPressed)
+    }
+}
+
+private struct WelcomeFeatureRow: View {
+    let systemImage: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .semibold, design: .default))
+                .foregroundStyle(AppTheme.blue)
+                .frame(width: 32, height: 32)
+                .background(AppTheme.surface.opacity(0.68), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(OnboardingFont.medium(14))
+                    .foregroundStyle(AppTheme.primaryText)
+
+                Text(detail)
+                    .font(OnboardingFont.regular(13))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 2)
-        .padding(.bottom, 2)
+    }
+}
+
+private struct ProfileSetupView: View {
+    @Binding var displayName: String
+    @Binding var campus: String
+    @Binding var major: String
+    @Binding var year: String
+
+    let onBack: () -> Void
+    let onComplete: () -> Void
+
+    @State private var step = 0
+    @FocusState private var isTextFieldFocused: Bool
+
+    private let campuses = ["St. George", "UTM", "UTSC"]
+    private let years = ["1st year", "2nd year", "3rd year", "4th year", "Graduate"]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: goBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold, design: .default))
+                        .foregroundStyle(AppTheme.navy)
+                        .frame(width: 38, height: 38)
+                        .background(AppTheme.surface.opacity(0.62), in: Circle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+
+            OnboardingProgressBar(currentStep: step, totalSteps: 4)
+                .padding(.top, 10)
+
+            Spacer(minLength: 34)
+
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text(stepTitle)
+                        .font(OnboardingFont.medium(31))
+                        .foregroundStyle(AppTheme.navy)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(stepSubtitle)
+                        .font(OnboardingFont.regular(15))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineSpacing(2)
+                }
+
+                stepContent
+
+                OnboardingActionButton(
+                    title: step == 3 ? "Finish" : "Next",
+                    systemImage: step == 3 ? "checkmark" : "arrow.right",
+                    isEnabled: canAdvance,
+                    action: advance
+                )
+            }
+            .padding(22)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(.white.opacity(0.66), lineWidth: 1)
+            }
+            .shadow(color: AppTheme.navy.opacity(0.12), radius: 28, y: 16)
+            .padding(.horizontal, 20)
+
+            Spacer(minLength: 38)
+        }
+        .onAppear {
+            if campus.isEmpty {
+                campus = campuses[0]
+            }
+
+            if year.isEmpty {
+                year = years[0]
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case 0:
+            OnboardingTextField(
+                title: "Name",
+                placeholder: "",
+                text: $displayName,
+                systemImage: "person.fill"
+            )
+            .focused($isTextFieldFocused)
+            .onAppear { isTextFieldFocused = true }
+        case 1:
+            OptionGrid(options: campuses, selection: $campus)
+        case 2:
+            OnboardingTextField(
+                title: "Program",
+                placeholder: "",
+                text: $major,
+                systemImage: "graduationcap.fill"
+            )
+            .focused($isTextFieldFocused)
+            .onAppear { isTextFieldFocused = true }
+        default:
+            OptionGrid(options: years, selection: $year)
+        }
+    }
+
+    private var stepTitle: String {
+        switch step {
+        case 0: return "What should UTime call you?"
+        case 1: return "Which campus are you on?"
+        case 2: return "What are you studying?"
+        default: return "What year are you in?"
+        }
+    }
+
+    private var stepSubtitle: String {
+        switch step {
+        case 0: return "This stays on your iPhone and is only used to personalize the app."
+        case 1: return "Campus helps UTime feel built around your U of T day."
+        case 2: return "Optional context for your local profile."
+        default: return "Last one. You can import your timetable from the home screen."
+        }
+    }
+
+    private var canAdvance: Bool {
+        switch step {
+        case 0: return !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case 1: return !campus.isEmpty
+        case 2: return !major.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        default: return !year.isEmpty
+        }
+    }
+
+    private func advance() {
+        guard canAdvance else { return }
+        isTextFieldFocused = false
+
+        if step < 3 {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) {
+                step += 1
+            }
+        } else {
+            onComplete()
+        }
+    }
+
+    private func goBack() {
+        isTextFieldFocused = false
+
+        if step > 0 {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) {
+                step -= 1
+            }
+        } else {
+            onBack()
+        }
+    }
+}
+
+private struct OnboardingBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    AppTheme.cream,
+                    AppTheme.background,
+                    AppTheme.sky.opacity(0.86),
+                    AppTheme.sky
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            LinearGradient(
+                colors: [
+                    AppTheme.blue.opacity(0.00),
+                    AppTheme.blue.opacity(0.15),
+                    AppTheme.navy.opacity(0.08)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .mask(
+                Rectangle()
+                    .frame(height: 470)
+                    .rotationEffect(.degrees(-12))
+                    .offset(y: 286)
+                    .blur(radius: 36)
+            )
+
+            LinearGradient(
+                colors: [.white.opacity(0.78), .white.opacity(0.16), .white.opacity(0.0)],
+                startPoint: .top,
+                endPoint: .center
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private struct OnboardingProgressBar: View {
+    let currentStep: Int
+    let totalSteps: Int
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(0..<totalSteps, id: \.self) { index in
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(AppTheme.navy.opacity(0.10))
+
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [AppTheme.blue, AppTheme.navy.opacity(0.86)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: proxy.size.width * fillAmount(for: index))
+                            .shadow(color: AppTheme.blue.opacity(index == currentStep ? 0.25 : 0), radius: 5, y: 1)
+                    }
+                }
+                .frame(height: index == currentStep ? 6 : 5)
+                .scaleEffect(x: index == currentStep ? 1.025 : 1, y: index == currentStep ? 1.18 : 1)
+            }
+        }
+        .padding(.horizontal, 48)
+        .animation(.spring(response: 0.56, dampingFraction: 0.58, blendDuration: 0.08), value: currentStep)
+    }
+
+    private func fillAmount(for index: Int) -> CGFloat {
+        index <= currentStep ? 1 : 0
+    }
+}
+
+private struct OnboardingActionButton: View {
+    let title: String
+    let systemImage: String
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(OnboardingFont.medium(16))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.blue)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                }
+                .shadow(color: isEnabled ? AppTheme.blue.opacity(0.20) : .clear, radius: 12, y: 7)
+        }
+        .buttonStyle(PressableButtonStyle())
+        .opacity(isEnabled ? 1 : 0.42)
+        .disabled(!isEnabled)
+    }
+}
+
+private struct OnboardingTextField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(OnboardingFont.medium(13))
+                .foregroundStyle(AppTheme.secondaryText)
+
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold, design: .default))
+                    .foregroundStyle(AppTheme.blue)
+                    .frame(width: 20)
+
+                TextField(placeholder, text: $text)
+                    .font(OnboardingFont.regular(17))
+                    .foregroundStyle(AppTheme.primaryText)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 52)
+            .background(AppTheme.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(AppTheme.blue.opacity(0.20), lineWidth: 1)
+            }
+        }
+    }
+}
+
+private struct OptionGrid: View {
+    let options: [String]
+    @Binding var selection: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            if options.count == 3 {
+                ForEach(options, id: \.self) { option in
+                    optionButton(option)
+                }
+            } else {
+                HStack(spacing: 10) {
+                    optionButton(options[0])
+                    optionButton(options[1])
+                }
+
+                HStack(spacing: 10) {
+                    optionButton(options[2])
+                    optionButton(options[3])
+                }
+
+                optionButton(options[4])
+            }
+        }
+    }
+
+    private func optionButton(_ option: String) -> some View {
+        Button {
+            selection = option
+        } label: {
+            Text(option)
+                .font(OnboardingFont.medium(14))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(PressableButtonStyle())
+        .foregroundStyle(selection == option ? .white : AppTheme.navy)
+        .background(selection == option ? AppTheme.blue : AppTheme.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(selection == option ? .white.opacity(0.18) : AppTheme.border.opacity(0.9), lineWidth: 1)
+        }
+        .shadow(color: selection == option ? AppTheme.blue.opacity(0.16) : AppTheme.navy.opacity(0.04), radius: selection == option ? 10 : 6, y: selection == option ? 6 : 3)
     }
 }
 
@@ -311,25 +973,25 @@ private struct NextClassCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Next class")
-                    .font(.system(size: 13, weight: .semibold, design: .default))
+                    .font(OnboardingFont.semibold(13))
                     .foregroundStyle(AppTheme.blue)
 
                 Spacer()
 
                 Text(event.startTime.formatted(date: .omitted, time: .shortened))
-                    .font(.system(size: 15, weight: .semibold, design: .default).monospacedDigit())
+                    .font(OnboardingFont.semibold(15).monospacedDigit())
                     .foregroundStyle(AppTheme.navy)
             }
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(event.courseCode)
-                    .font(.system(size: 30, weight: .semibold, design: .default))
+                    .font(OnboardingFont.semibold(30))
                     .foregroundStyle(AppTheme.navy)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 Text(eventSubtitle)
-                    .font(.system(size: 14, weight: .medium, design: .default))
+                    .font(OnboardingFont.medium(14))
                     .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -337,7 +999,7 @@ private struct NextClassCard: View {
 
             HStack(spacing: 10) {
                 Label(locationLabel, systemImage: locationIcon)
-                    .font(.system(size: 15, weight: .semibold, design: .default))
+                    .font(OnboardingFont.semibold(15))
                     .foregroundStyle(AppTheme.navy)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -348,7 +1010,7 @@ private struct NextClassCard: View {
                 Spacer(minLength: 0)
 
                 Text(event.startTime.formatted(date: .abbreviated, time: .omitted))
-                    .font(.system(size: 13, weight: .medium, design: .default))
+                    .font(OnboardingFont.medium(13))
                     .foregroundStyle(AppTheme.secondaryText)
             }
         }
@@ -361,7 +1023,13 @@ private struct NextClassCard: View {
     }
 
     private var eventSubtitle: String {
-        [event.meetingType, event.section, event.deliveryMode]
+        if event.deliveryMode == "Asynchronous" {
+            return [event.meetingType, event.section]
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+        }
+
+        return [event.meetingType, event.section, event.deliveryMode]
             .filter { !$0.isEmpty }
             .joined(separator: " • ")
     }
@@ -393,7 +1061,6 @@ private struct NextClassCard: View {
 
 private struct ImportScheduleCard: View {
     let importedCount: Int
-    let statusMessage: String
     let importAction: () -> Void
 
     var body: some View {
@@ -413,8 +1080,6 @@ private struct ImportScheduleCard: View {
                     systemImage: "square.and.arrow.down",
                     action: importAction
                 )
-
-                StatusCard(message: statusMessage)
             }
         }
     }
@@ -434,11 +1099,11 @@ private struct TutorialStep: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .default))
+                    .font(OnboardingFont.semibold(13))
                     .foregroundStyle(AppTheme.primaryText)
 
                 Text(text)
-                    .font(.system(size: 13, weight: .regular, design: .default))
+                    .font(OnboardingFont.regular(13))
                     .foregroundStyle(AppTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -461,13 +1126,13 @@ private struct ReminderSettingsCard: View {
             VStack(spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Before class")
-                        .font(.system(size: 15, weight: .medium, design: .default))
+                        .font(OnboardingFont.medium(15))
                         .foregroundStyle(AppTheme.primaryText)
 
                     Spacer()
 
                     Text("\(leadMinutes) min")
-                        .font(.system(size: 20, weight: .semibold, design: .default).monospacedDigit())
+                        .font(OnboardingFont.semibold(20).monospacedDigit())
                         .foregroundStyle(AppTheme.navy)
                 }
 
@@ -486,19 +1151,19 @@ private struct ReminderSettingsCard: View {
                     Spacer()
                     Text("60 min max")
                 }
-                .font(.system(size: 12, weight: .medium, design: .default))
+                .font(OnboardingFont.medium(12))
                 .foregroundStyle(AppTheme.secondaryText)
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Red alert cue")
-                            .font(.system(size: 15, weight: .medium, design: .default))
+                            .font(OnboardingFont.medium(15))
                             .foregroundStyle(AppTheme.primaryText)
 
                         Spacer()
 
                         Text("\(alertCueMinutes) min")
-                            .font(.system(size: 15, weight: .semibold, design: .default).monospacedDigit())
+                            .font(OnboardingFont.semibold(15).monospacedDigit())
                             .foregroundStyle(AppTheme.red)
                     }
 
@@ -516,7 +1181,7 @@ private struct ReminderSettingsCard: View {
                     }
 
                     Text("Options after the island start time are disabled.")
-                        .font(.system(size: 12, weight: .regular, design: .default))
+                        .font(OnboardingFont.regular(12))
                         .foregroundStyle(AppTheme.secondaryText)
                 }
                 .padding(.top, 2)
@@ -540,7 +1205,7 @@ private struct AlertCueButton: View {
     var body: some View {
         Button(action: action) {
             Text("\(minutes) min")
-                .font(.system(size: 13, weight: .semibold, design: .default).monospacedDigit())
+                .font(OnboardingFont.semibold(13).monospacedDigit())
                 .frame(maxWidth: .infinity)
                 .frame(height: 36)
         }
@@ -609,7 +1274,7 @@ private struct EmptyScheduleView: View {
                 .foregroundStyle(AppTheme.blue)
 
             Text("No classes imported yet")
-                .font(.system(size: 14, weight: .regular, design: .default))
+                .font(OnboardingFont.regular(14))
                 .foregroundStyle(AppTheme.secondaryText)
 
             Spacer(minLength: 0)
@@ -627,12 +1292,12 @@ private struct ClassRow: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(event.courseCode)
-                    .font(.system(size: 16, weight: .semibold, design: .default))
+                    .font(OnboardingFont.semibold(16))
                     .foregroundStyle(AppTheme.navy)
                     .lineLimit(1)
 
                 Text(eventSubtitle)
-                    .font(.system(size: 13, weight: .regular, design: .default))
+                    .font(OnboardingFont.regular(13))
                     .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -642,13 +1307,13 @@ private struct ClassRow: View {
 
             VStack(alignment: .trailing, spacing: 5) {
                 Text(event.startTime.formatted(date: .abbreviated, time: .shortened))
-                    .font(.system(size: 13, weight: .medium, design: .default))
+                    .font(OnboardingFont.medium(13))
                     .foregroundStyle(AppTheme.primaryText)
                     .multilineTextAlignment(.trailing)
 
                 if !eventLocation.isEmpty {
                     Text(eventLocation)
-                        .font(.system(size: 13, weight: .medium, design: .default))
+                        .font(OnboardingFont.medium(13))
                         .foregroundStyle(AppTheme.blue)
                         .lineLimit(1)
                 }
@@ -660,7 +1325,13 @@ private struct ClassRow: View {
     }
 
     private var eventSubtitle: String {
-        [event.meetingType, event.section, event.deliveryMode]
+        if event.deliveryMode == "Asynchronous" {
+            return [event.meetingType, event.section]
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+        }
+
+        return [event.meetingType, event.section, event.deliveryMode]
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
@@ -672,25 +1343,33 @@ private struct ClassRow: View {
     }
 }
 
-private struct StatusCard: View {
+private struct FloatingStatusToast: View {
     let message: String
 
     var body: some View {
         HStack(spacing: 10) {
-            Circle()
-                .fill(AppTheme.blue)
-                .frame(width: 7, height: 7)
+            Image(systemName: "sparkles")
+                .font(.system(size: 13, weight: .semibold, design: .default))
+                .foregroundStyle(AppTheme.blue)
+                .frame(width: 24, height: 24)
+                .background(AppTheme.blue.opacity(0.10), in: Circle())
 
             Text(message)
-                .font(.system(size: 13, weight: .medium, design: .default))
+                .font(OnboardingFont.medium(14))
                 .foregroundStyle(AppTheme.primaryText)
+                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 11)
-        .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.74), lineWidth: 1)
+        }
+        .shadow(color: AppTheme.navy.opacity(0.14), radius: 20, y: 10)
     }
 }
 
@@ -703,11 +1382,11 @@ private struct ActionPanel<Content: View>: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 18, weight: .semibold, design: .default))
+                    .font(OnboardingFont.semibold(18))
                     .foregroundStyle(AppTheme.navy)
 
                 Text(subtitle)
-                    .font(.system(size: 13, weight: .regular, design: .default))
+                    .font(OnboardingFont.regular(13))
                     .foregroundStyle(AppTheme.secondaryText)
             }
 
@@ -730,7 +1409,7 @@ private struct PrimaryActionButton: View {
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: 15, weight: .semibold, design: .default))
+                .font(OnboardingFont.semibold(15))
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
         }
@@ -748,7 +1427,7 @@ private struct SecondaryActionButton: View {
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: 15, weight: .medium, design: .default))
+                .font(OnboardingFont.medium(15))
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
         }
@@ -766,7 +1445,7 @@ private struct DestructiveActionButton: View {
     var body: some View {
         Button(role: .destructive, action: action) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: 15, weight: .medium, design: .default))
+                .font(OnboardingFont.medium(15))
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
         }
@@ -779,9 +1458,11 @@ private struct DestructiveActionButton: View {
 private enum AppTheme {
     static let navy = Color(red: 0.0, green: 0.16, blue: 0.36)
     static let deepNavy = Color(red: 0.0, green: 0.09, blue: 0.20)
-    static let blue = Color(red: 0.0, green: 0.37, blue: 0.70)
+    static let blue = Color(red: 0.0, green: 0.42, blue: 0.78)
     static let red = Color(red: 0.78, green: 0.16, blue: 0.16)
-    static let background = Color(red: 0.965, green: 0.98, blue: 0.995)
+    static let cream = Color(red: 0.995, green: 0.985, blue: 0.955)
+    static let sky = Color(red: 0.84, green: 0.94, blue: 0.99)
+    static let background = Color(red: 0.975, green: 0.985, blue: 0.995)
     static let surface = Color.white
     static let field = Color(red: 0.955, green: 0.972, blue: 0.99)
     static let border = Color(red: 0.84, green: 0.89, blue: 0.945)

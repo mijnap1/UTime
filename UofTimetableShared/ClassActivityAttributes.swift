@@ -31,6 +31,10 @@ struct ClassActivityAttributes: ActivityAttributes, Hashable {
         }
 
         var compactCourseCode: String {
+            displayCourseCode
+        }
+
+        var displayCourseCode: String {
             let trimmedCode = courseCode.trimmingCharacters(in: .whitespacesAndNewlines)
             let characters = Array(trimmedCode)
 
@@ -130,11 +134,27 @@ struct ClassActivityAttributes: ActivityAttributes, Hashable {
             return deliveryLabel
         }
 
+        var expandedCourseSubtitle: String {
+            isAsynchronous ? "" : meetingCode
+        }
+
+        var expandedFooterText: String {
+            if isAsynchronous {
+                return meetingCode
+            }
+
+            return classTimeRange
+        }
+
         var meetingSummary: String {
             let meeting = [meetingType, section]
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
+
+            if isAsynchronous {
+                return meeting
+            }
 
             return [meeting, deliveryMode.trimmingCharacters(in: .whitespacesAndNewlines)]
                 .filter { !$0.isEmpty }

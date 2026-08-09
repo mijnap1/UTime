@@ -6,7 +6,44 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A10000103027766D00000001 /* ClassActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000023027766D00000001 /* ClassActivityAttributes.swift */; };
+		A10000113027766D00000001 /* ClassActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000023027766D00000001 /* ClassActivityAttributes.swift */; };
+		A10000123027766D00000001 /* UofTimetableWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000043027766D00000001 /* UofTimetableWidgetBundle.swift */; };
+		A10000133027766D00000001 /* UofTimetableLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000053027766D00000001 /* UofTimetableLiveActivityWidget.swift */; };
+		A10000143027766D00000001 /* UofTimetableWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000073027766D00000001 /* UofTimetableWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A10000203027766D00000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F96C1A523027766C0081649E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000403027766D00000001;
+			remoteInfo = UofTimetableWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000333027766D00000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000143027766D00000001 /* UofTimetableWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		A10000023027766D00000001 /* ClassActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassActivityAttributes.swift; sourceTree = "<group>"; };
+		A10000043027766D00000001 /* UofTimetableWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UofTimetableWidgetBundle.swift; sourceTree = "<group>"; };
+		A10000053027766D00000001 /* UofTimetableLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UofTimetableLiveActivityWidget.swift; sourceTree = "<group>"; };
+		A10000063027766D00000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000073027766D00000001 /* UofTimetableWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UofTimetableWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F96C1A5A3027766D0081649E /* UofTimetable.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UofTimetable.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -19,6 +56,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A10000313027766D00000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F96C1A573027766D0081649E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -29,10 +73,30 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A10000013027766D00000001 /* UofTimetableShared */ = {
+			isa = PBXGroup;
+			children = (
+				A10000023027766D00000001 /* ClassActivityAttributes.swift */,
+			);
+			path = UofTimetableShared;
+			sourceTree = "<group>";
+		};
+		A10000033027766D00000001 /* UofTimetableWidget */ = {
+			isa = PBXGroup;
+			children = (
+				A10000043027766D00000001 /* UofTimetableWidgetBundle.swift */,
+				A10000053027766D00000001 /* UofTimetableLiveActivityWidget.swift */,
+				A10000063027766D00000001 /* Info.plist */,
+			);
+			path = UofTimetableWidget;
+			sourceTree = "<group>";
+		};
 		F96C1A513027766C0081649E = {
 			isa = PBXGroup;
 			children = (
 				F96C1A5C3027766D0081649E /* UofTimetable */,
+				A10000013027766D00000001 /* UofTimetableShared */,
+				A10000033027766D00000001 /* UofTimetableWidget */,
 				F96C1A5B3027766D0081649E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +105,7 @@
 			isa = PBXGroup;
 			children = (
 				F96C1A5A3027766D0081649E /* UofTimetable.app */,
+				A10000073027766D00000001 /* UofTimetableWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,6 +113,25 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A10000403027766D00000001 /* UofTimetableWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000523027766D00000001 /* Build configuration list for PBXNativeTarget "UofTimetableWidget" */;
+			buildPhases = (
+				A10000303027766D00000001 /* Sources */,
+				A10000313027766D00000001 /* Frameworks */,
+				A10000323027766D00000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = UofTimetableWidget;
+			packageProductDependencies = (
+			);
+			productName = UofTimetableWidget;
+			productReference = A10000073027766D00000001 /* UofTimetableWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		F96C1A593027766D0081649E /* UofTimetable */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F96C1A673027766E0081649E /* Build configuration list for PBXNativeTarget "UofTimetable" */;
@@ -55,10 +139,12 @@
 				F96C1A563027766D0081649E /* Sources */,
 				F96C1A573027766D0081649E /* Frameworks */,
 				F96C1A583027766D0081649E /* Resources */,
+				A10000333027766D00000001 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A10000213027766D00000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F96C1A5C3027766D0081649E /* UofTimetable */,
@@ -80,6 +166,9 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					A10000403027766D00000001 = {
+						CreatedOnToolsVersion = 26.6;
+					};
 					F96C1A593027766D0081649E = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -100,11 +189,19 @@
 			projectRoot = "";
 			targets = (
 				F96C1A593027766D0081649E /* UofTimetable */,
+				A10000403027766D00000001 /* UofTimetableWidget */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A10000323027766D00000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F96C1A583027766D0081649E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -115,16 +212,99 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A10000303027766D00000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000123027766D00000001 /* UofTimetableWidgetBundle.swift in Sources */,
+				A10000133027766D00000001 /* UofTimetableLiveActivityWidget.swift in Sources */,
+				A10000113027766D00000001 /* ClassActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F96C1A563027766D0081649E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000103027766D00000001 /* ClassActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		A10000213027766D00000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000403027766D00000001 /* UofTimetableWidget */;
+			targetProxy = A10000203027766D00000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		A10000503027766D00000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y98R845KZ2;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = UofTimetableWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jamie.UTime.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A10000513027766D00000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y98R845KZ2;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = UofTimetableWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jamie.UTime.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		F96C1A653027766E0081649E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -256,17 +436,20 @@
 				DEVELOPMENT_TEAM = Y98R845KZ2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = UTime;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jamie.UofTimetable;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jamie.UTime;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -288,17 +471,20 @@
 				DEVELOPMENT_TEAM = Y98R845KZ2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = UTime;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jamie.UofTimetable;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jamie.UTime;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -313,6 +499,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A10000523027766D00000001 /* Build configuration list for PBXNativeTarget "UofTimetableWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000503027766D00000001 /* Debug */,
+				A10000513027766D00000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F96C1A553027766C0081649E /* Build configuration list for PBXProject "UofTimetable" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

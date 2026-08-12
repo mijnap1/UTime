@@ -52,7 +52,11 @@ struct ContentView: View {
                         applyReminderSettings()
                     }
 
-                    ScheduleListCard(events: upcomingEvents, clearAction: clearSchedule)
+                    ScheduleListCard(
+                        events: upcomingEvents,
+                        deleteAction: deleteEvent,
+                        clearAction: clearSchedule
+                    )
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
@@ -174,6 +178,26 @@ struct ContentView: View {
             await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate)
         }
         showToast("Schedule cleared.")
+    }
+
+    private func deleteEvent(_ event: CourseEvent) {
+        let deletedCourseCode = event.courseCode
+        let remainingEvents = courseEvents.filter { $0 !== event }
+        let remainingSnapshots = remainingEvents.map(snapshot(from:))
+
+        withAnimation {
+            modelContext.delete(event)
+            try? modelContext.save()
+        }
+
+        islandTask?.cancel()
+        Task {
+            await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate)
+            await MainActor.run {
+                restartIslandScheduler(with: remainingSnapshots)
+                showToast("Deleted \(deletedCourseCode).")
+            }
+        }
     }
 
     private func applyReminderSettings() {
@@ -356,7 +380,7 @@ private struct AppHeaderView: View {
                     .font(OnboardingFont.semibold(35))
                     .foregroundStyle(AppTheme.navy)
 
-                Text("UofT classes, rooms, and live alerts.")
+                Text("U of T classes, rooms, and live alerts.")
                     .font(OnboardingFont.medium(16))
                     .foregroundStyle(AppTheme.secondaryText)
                     .multilineTextAlignment(.center)
@@ -421,10 +445,10 @@ private struct AppHeaderView: View {
         let trimmedName = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if hasSchedule, !trimmedName.isEmpty {
-            return "Ready for your next class, \(trimmedName). UTime keeps your schedule on this device."
+            return "Ready for your next class, \(trimmedName). UTime keeps your timetable on your iPhone and uses limited Live Activity data for lock screen updates."
         }
 
-        return "Import your timetable once. UTime keeps your schedule on this device and brings the next class to your Lock Screen."
+        return "Import your timetable once. UTime keeps your classes ready and brings the next room to your Lock Screen."
     }
 }
 
@@ -512,7 +536,7 @@ private struct WelcomeOnboardingView: View {
             Spacer(minLength: 48)
 
             VStack(alignment: .leading, spacing: 14) {
-                WelcomeFeatureRow(systemImage: "calendar", title: "Import once", detail: ".ics schedules stay on your device.")
+                WelcomeFeatureRow(systemImage: "calendar", title: "Import once", detail: "Choose your .ics timetable file.")
                 WelcomeFeatureRow(systemImage: "location.fill", title: "Find the room", detail: "Course and room show on the Lock Screen.")
                 WelcomeFeatureRow(systemImage: "timer", title: "Arrive on time", detail: "Live cues appear before class.")
             }
@@ -734,7 +758,7 @@ private struct ProfileSetupView: View {
     private var stepSubtitle: String {
         switch step {
         case 0: return "This stays on your iPhone and is only used to personalize the app."
-        case 1: return "Campus helps UTime feel built around your U of T day."
+        case 1: return "Campus helps UTime feel built around your day."
         case 2: return "Optional context for your local profile."
         default: return "Last one. You can import your timetable from the home screen."
         }
@@ -1064,7 +1088,7 @@ private struct ImportScheduleCard: View {
     let importAction: () -> Void
 
     var body: some View {
-        ActionPanel(title: "Import Schedule", subtitle: "Use the .ics file from your U of T timetable") {
+        ActionPanel(title: "Import Schedule", subtitle: "Use the .ics file from your timetable") {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(spacing: 0) {
                     TutorialStep(systemImage: "arrow.down.doc", title: "Download", text: "Export your timetable as an .ics calendar file.")
@@ -1238,7 +1262,10 @@ private struct AlertCueButton: View {
 
 private struct ScheduleListCard: View {
     let events: [CourseEvent]
+    let deleteAction: (CourseEvent) -> Void
     let clearAction: () -> Void
+
+    @State private var isConfirmingClear = false
 
     var body: some View {
         ActionPanel(title: "Upcoming Classes", subtitle: subtitle) {
@@ -1247,22 +1274,122 @@ private struct ScheduleListCard: View {
             } else {
                 VStack(spacing: 10) {
                     ForEach(events.prefix(12)) { event in
-                        ClassRow(event: event)
+                        SwipeToDeleteRow {
+                            ClassRow(event: event)
+                        } deleteAction: {
+                            deleteAction(event)
+                        }
                     }
 
                     DestructiveActionButton(
                         title: "Clear Schedule",
                         systemImage: "trash",
-                        action: clearAction
+                        action: { isConfirmingClear = true }
                     )
                     .padding(.top, 4)
                 }
             }
         }
+        .alert("Clear schedule?", isPresented: $isConfirmingClear) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear Schedule", role: .destructive, action: clearAction)
+        } message: {
+            Text("This deletes every imported class from UTime on this device.")
+        }
     }
 
     private var subtitle: String {
         events.isEmpty ? "Imported classes will appear here" : "\(events.count) future classes imported"
+    }
+}
+
+private struct SwipeToDeleteRow<Content: View>: View {
+    let content: Content
+    let deleteAction: () -> Void
+
+    @State private var offset: CGFloat = 0
+    @State private var dragStartOffset: CGFloat = 0
+    @State private var isTrackingHorizontalDrag = false
+
+    private let deleteWidth: CGFloat = 82
+
+    init(@ViewBuilder content: () -> Content, deleteAction: @escaping () -> Void) {
+        self.content = content()
+        self.deleteAction = deleteAction
+    }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Button(role: .destructive) {
+                withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.88, blendDuration: 0.08)) {
+                    offset = 0
+                }
+                deleteAction()
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 15, weight: .semibold, design: .default))
+                    Text("Delete")
+                        .font(OnboardingFont.semibold(11))
+                }
+                .foregroundStyle(.white)
+                .frame(width: deleteWidth)
+                .frame(maxHeight: .infinity)
+                .background(AppTheme.red)
+            }
+            .buttonStyle(.plain)
+
+            content
+                .offset(x: offset)
+                .onTapGesture {
+                    close()
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 12, coordinateSpace: .local)
+                        .onChanged { value in
+                            if !isTrackingHorizontalDrag {
+                                let horizontal = abs(value.translation.width)
+                                let vertical = abs(value.translation.height)
+
+                                guard horizontal > 10 || vertical > 10 else { return }
+                                guard horizontal > vertical * 1.35 else { return }
+
+                                isTrackingHorizontalDrag = true
+                                dragStartOffset = offset
+                            }
+
+                            guard isTrackingHorizontalDrag else { return }
+
+                            let nextOffset = dragStartOffset + value.translation.width
+                            offset = min(0, max(-deleteWidth, nextOffset))
+                        }
+                        .onEnded { value in
+                            defer {
+                                isTrackingHorizontalDrag = false
+                                dragStartOffset = 0
+                            }
+
+                            guard isTrackingHorizontalDrag else { return }
+
+                            let predictedOffset = dragStartOffset + value.predictedEndTranslation.width
+                            let shouldOpen = predictedOffset < -deleteWidth * 0.52 || offset < -deleteWidth * 0.62
+
+                            withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.82, blendDuration: 0.08)) {
+                                offset = shouldOpen ? -deleteWidth : 0
+                            }
+                        }
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.92, blendDuration: 0.06), value: offset)
+    }
+
+    private func close() {
+        guard offset != 0 else { return }
+
+        withAnimation(.interactiveSpring(response: 0.30, dampingFraction: 0.9, blendDuration: 0.06)) {
+            offset = 0
+        }
     }
 }
 

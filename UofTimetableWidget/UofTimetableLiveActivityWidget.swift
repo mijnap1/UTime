@@ -30,7 +30,10 @@ struct UofTimetableLiveActivityWidget: Widget {
                         .padding(.top, 2)
                 }
             } compactLeading: {
-                CompactCountdownLeadingView(state: context.state)
+                CompactCountdownLeadingView(
+                    state: context.state,
+                    isStale: context.isStale
+                )
             } compactTrailing: {
                 CompactLocationView(state: context.state)
             } minimal: {
@@ -335,14 +338,15 @@ private struct ExpandedCountdownView: View {
 
 private struct CompactCountdownLeadingView: View {
     let state: ClassActivityAttributes.ContentState
+    let isStale: Bool
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { timeline in
-            let showCountdown = state.shouldShowCompactCountdown(now: timeline.date)
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let showCountdown = isStale || state.shouldShowCompactCountdown(now: timeline.date)
 
             ZStack(alignment: .leading) {
                 if showCountdown {
-                    compactTimer(now: timeline.date)
+                    compactTimer
                         .transition(.compactCue)
                 } else {
                     compactCourse
@@ -362,21 +366,15 @@ private struct CompactCountdownLeadingView: View {
             .lineLimit(1)
     }
 
-    private func compactTimer(now: Date) -> some View {
+    private var compactTimer: some View {
         HStack(spacing: 3) {
             Image(systemName: "clock.fill")
                 .font(.system(size: 9, weight: .semibold, design: .default))
 
-            if state.startTime > now {
-                Text(timerInterval: now...state.startTime, countsDown: true)
-                    .font(.system(size: 13, weight: .semibold, design: .default).monospacedDigit())
-                    .lineLimit(1)
-                    .frame(width: 34, alignment: .leading)
-            } else {
-                Text("now")
-                    .font(.system(size: 13, weight: .semibold, design: .default))
-                    .lineLimit(1)
-            }
+            Text(timerInterval: Date.now...state.startTime, countsDown: true)
+                .font(.system(size: 13, weight: .semibold, design: .default).monospacedDigit())
+                .lineLimit(1)
+                .frame(width: 34, alignment: .leading)
         }
         .foregroundStyle(ActivityStyle.red)
     }

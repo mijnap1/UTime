@@ -16,7 +16,12 @@ enum ClassLiveActivityError: Error {
 final class ClassLiveActivityManager {
     static let shared = ClassLiveActivityManager()
 
+    static let latestPushTokenDefaultsKey = "latestLiveActivityPushToken"
+    static let latestActivityIDDefaultsKey = "latestLiveActivityID"
+
     private init() {}
+
+    private var tokenListenerTask: Task<Void, Never>?
 
     private var currentActivity: Activity<ClassActivityAttributes>? {
         Activity<ClassActivityAttributes>.activities.first
@@ -60,14 +65,29 @@ final class ClassLiveActivityManager {
 
         let state = attributes.initialState
 
-        return try Activity<ClassActivityAttributes>.request(
-            attributes: attributes,
-            content: ActivityContent(
-                state: state,
-                staleDate: staleDate(for: state)
-            ),
-            pushType: nil
+        let content = ActivityContent(
+            state: state,
+            staleDate: staleDate(for: state)
         )
+
+        let activity: Activity<ClassActivityAttributes>
+        do {
+            activity = try Activity<ClassActivityAttributes>.request(
+                attributes: attributes,
+                content: content,
+                pushType: .token
+            )
+            observePushTokenUpdates(for: activity)
+        } catch {
+            print("Push-enabled Live Activity failed, falling back to local-only: \(error.localizedDescription)")
+            activity = try Activity<ClassActivityAttributes>.request(
+                attributes: attributes,
+                content: content,
+                pushType: nil
+            )
+        }
+
+        return activity
     }
 
     func update(
@@ -110,6 +130,9 @@ final class ClassLiveActivityManager {
     }
 
     func end(dismissalPolicy: ActivityUIDismissalPolicy = .default) async {
+        tokenListenerTask?.cancel()
+        tokenListenerTask = nil
+
         guard let activity = currentActivity else { return }
 
         await activity.end(
@@ -142,5 +165,24 @@ final class ClassLiveActivityManager {
         }
 
         return state.startTime
+    }
+
+    private func observePushTokenUpdates(for activity: Activity<ClassActivityAttributes>) {
+        tokenListenerTask?.cancel()
+
+        tokenListenerTask = Task {
+            for await tokenData in activity.pushTokenUpdates {
+                let token = tokenData.map { String(format: "%02x", $0) }.joined()
+                UserDefaults.standard.set(token, forKey: Self.latestPushTokenDefaultsKey)
+                UserDefaults.standard.set(activity.id, forKey: Self.latestActivityIDDefaultsKey)
+                print("Live Activity push token updated: \(token)")
+
+                await LiveActivityPushRegistrationClient.shared.register(
+                    activityID: activity.id,
+                    pushToken: token,
+                    state: activity.content.state
+                )
+            }
+        }
     }
 }

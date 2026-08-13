@@ -177,15 +177,27 @@ struct ClassActivityAttributes: ActivityAttributes, Hashable {
         }
 
         func countdownTarget(now: Date = .now) -> Date {
-            startTime
+            if now >= startTime {
+                return endTime
+            }
+
+            return startTime
         }
 
         func phaseLabel(now: Date = .now) -> String {
-            "Starts in"
+            if now >= startTime {
+                return "In class"
+            }
+
+            return "Starts in"
         }
 
         func timeSummary(now: Date = .now) -> String {
-            "Starts \(startTime.formatted(date: .omitted, time: .shortened))"
+            if now >= startTime {
+                return "Ends \(endTime.formatted(date: .omitted, time: .shortened))"
+            }
+
+            return "Starts \(startTime.formatted(date: .omitted, time: .shortened))"
         }
     }
 

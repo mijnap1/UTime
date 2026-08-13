@@ -27,6 +27,9 @@ struct UofTimetableApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .task {
+                    PushToStartTokenManager.shared.startListening()
+                }
         }
         .modelContainer(sharedModelContainer)
     }

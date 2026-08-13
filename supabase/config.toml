@@ -3,5 +3,11 @@ project_id = "almwdqahpisubekxipbv"
 [functions.register-live-activity]
 verify_jwt = false
 
+[functions.register-push-to-start-token]
+verify_jwt = false
+
+[functions.sync-schedule]
+verify_jwt = false
+
 [functions.process-live-activities]
 verify_jwt = false

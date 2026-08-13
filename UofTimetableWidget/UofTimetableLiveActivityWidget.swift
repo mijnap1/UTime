@@ -342,11 +342,12 @@ private struct CompactCountdownLeadingView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            let showCountdown = isStale || state.shouldShowCompactCountdown(now: timeline.date)
+            let showCountdown = timeline.date < state.startTime
+                && (isStale || state.shouldShowCompactCountdown(now: timeline.date))
 
             ZStack(alignment: .leading) {
                 if showCountdown {
-                    compactTimer
+                    compactTimer(now: timeline.date)
                         .transition(.compactCue)
                 } else {
                     compactCourse
@@ -366,15 +367,22 @@ private struct CompactCountdownLeadingView: View {
             .lineLimit(1)
     }
 
-    private var compactTimer: some View {
+    private func compactTimer(now: Date) -> some View {
         HStack(spacing: 3) {
             Image(systemName: "clock.fill")
                 .font(.system(size: 9, weight: .semibold, design: .default))
 
-            Text(timerInterval: Date.now...state.startTime, countsDown: true)
-                .font(.system(size: 13, weight: .semibold, design: .default).monospacedDigit())
-                .lineLimit(1)
-                .frame(width: 34, alignment: .leading)
+            if state.startTime > now {
+                Text(timerInterval: now...state.startTime, countsDown: true)
+                    .font(.system(size: 13, weight: .semibold, design: .default).monospacedDigit())
+                    .lineLimit(1)
+                    .frame(width: 34, alignment: .leading)
+            } else {
+                Text("now")
+                    .font(.system(size: 13, weight: .semibold, design: .default).monospacedDigit())
+                    .lineLimit(1)
+                    .frame(width: 34, alignment: .leading)
+            }
         }
         .foregroundStyle(ActivityStyle.red)
     }

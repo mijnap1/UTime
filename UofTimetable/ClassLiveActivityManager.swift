@@ -146,12 +146,16 @@ final class ClassLiveActivityManager {
 
     func endIfStartTimePassed(now: Date = .now) async {
         guard let activity = currentActivity else { return }
-        guard activity.content.state.startTime <= now else { return }
+        guard activity.content.state.endTime <= now else { return }
 
         await end(dismissalPolicy: .immediate)
     }
 
     private func staleDate(for state: ClassActivityAttributes.ContentState, now: Date = .now) -> Date {
+        if now >= state.startTime {
+            return state.endTime
+        }
+
         if state.compactShowsCountdown {
             return state.compactCountdownUntil ?? state.startTime
         }
@@ -167,7 +171,7 @@ final class ClassLiveActivityManager {
         return state.startTime
     }
 
-    private func observePushTokenUpdates(for activity: Activity<ClassActivityAttributes>) {
+    func observePushTokenUpdates(for activity: Activity<ClassActivityAttributes>) {
         tokenListenerTask?.cancel()
 
         tokenListenerTask = Task {

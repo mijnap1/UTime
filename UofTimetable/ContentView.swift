@@ -15,6 +15,7 @@ struct ContentView: View {
     @Query(sort: \CourseEvent.startTime) private var courseEvents: [CourseEvent]
     @AppStorage("reminderLeadMinutes") private var reminderLeadMinutes = 30
     @AppStorage("alertCueMinutes") private var alertCueMinutes = 5
+    @AppStorage("isLiveActivityPaused") private var isLiveActivityPaused = false
     @AppStorage("hasCompletedProfileSetup") private var hasCompletedProfileSetup = false
     @AppStorage("studentDisplayName") private var studentDisplayName = ""
     @AppStorage("studentCampus") private var studentCampus = ""
@@ -47,7 +48,8 @@ struct ContentView: View {
 
                     ReminderSettingsCard(
                         leadMinutes: $reminderLeadMinutes,
-                        alertCueMinutes: $alertCueMinutes
+                        alertCueMinutes: $alertCueMinutes,
+                        isPaused: $isLiveActivityPaused
                     ) {
                         applyReminderSettings()
                     }
@@ -96,6 +98,9 @@ struct ContentView: View {
             alertCueMinutes = min(max(newValue, 1), 60)
             clampAlertCueMinutes()
         }
+        .onChange(of: isLiveActivityPaused) { _, _ in
+            applyReminderSettings()
+        }
         .fullScreenCover(isPresented: $isShowingProfileSetup) {
             OnboardingFlowView(
                 displayName: $studentDisplayName,
@@ -129,6 +134,7 @@ struct ContentView: View {
             let snapshots = drafts.map(CourseReminderSnapshot.init)
 
             restartIslandScheduler(with: snapshots)
+            syncSchedule(with: snapshots)
 
             showToast(
                 drafts.isEmpty
@@ -176,6 +182,11 @@ struct ContentView: View {
         islandTask?.cancel()
         Task {
             await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate)
+            await LiveActivityPushRegistrationClient.shared.syncSchedule(
+                events: [],
+                liveActivityLeadMinutes: reminderLeadMinutes,
+                alertCueMinutes: alertCueMinutes
+            )
         }
         showToast("Schedule cleared.")
     }
@@ -194,6 +205,7 @@ struct ContentView: View {
         Task {
             await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate)
             await MainActor.run {
+                syncSchedule(with: remainingSnapshots)
                 restartIslandScheduler(with: remainingSnapshots)
                 showToast("Deleted \(deletedCourseCode).")
             }
@@ -202,8 +214,15 @@ struct ContentView: View {
 
     private func applyReminderSettings() {
         clampAlertCueMinutes()
-        restartIslandScheduler()
-        showToast("Live Activity timing updated.")
+
+        if isLiveActivityPaused {
+            pauseLiveActivities()
+            showToast("Live Activities paused.")
+        } else {
+            restartIslandScheduler()
+            syncSchedule()
+            showToast("Live Activity timing updated.")
+        }
     }
 
     private func restartIslandScheduler() {
@@ -212,6 +231,8 @@ struct ContentView: View {
 
     private func restartIslandScheduler(with snapshots: [CourseReminderSnapshot]) {
         islandTask?.cancel()
+        guard !isLiveActivityPaused else { return }
+
         let leadMinutes = reminderLeadMinutes
 
         islandTask = Task {
@@ -219,6 +240,38 @@ struct ContentView: View {
             await runIslandScheduler(
                 events: snapshots,
                 leadMinutes: leadMinutes
+            )
+        }
+    }
+
+    private func syncSchedule() {
+        syncSchedule(with: upcomingEvents.map(snapshot(from:)))
+    }
+
+    private func syncSchedule(with snapshots: [CourseReminderSnapshot]) {
+        let leadMinutes = reminderLeadMinutes
+        let cueMinutes = alertCueMinutes
+        let events = isLiveActivityPaused ? [] : snapshots
+
+        Task {
+            await LiveActivityPushRegistrationClient.shared.syncSchedule(
+                events: events,
+                liveActivityLeadMinutes: leadMinutes,
+                alertCueMinutes: cueMinutes
+            )
+        }
+    }
+
+    private func pauseLiveActivities() {
+        islandTask?.cancel()
+        islandTask = nil
+
+        Task {
+            await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate)
+            await LiveActivityPushRegistrationClient.shared.syncSchedule(
+                events: [],
+                liveActivityLeadMinutes: reminderLeadMinutes,
+                alertCueMinutes: alertCueMinutes
             )
         }
     }
@@ -236,13 +289,13 @@ struct ContentView: View {
             let islandStartTime = event.startTime.addingTimeInterval(-leadSeconds)
             let delayUntilIsland = max(0, islandStartTime.timeIntervalSinceNow)
             try? await Task.sleep(nanoseconds: UInt64(delayUntilIsland * 1_000_000_000))
-            guard !Task.isCancelled, Date() < event.startTime else { continue }
+            guard !Task.isCancelled, Date() < event.endTime else { continue }
 
             await startLiveActivity(for: event)
             await switchToCompactCountdownIfNeeded(for: event, leadMinutes: leadMinutes)
 
-            let delayUntilStart = max(0, event.startTime.timeIntervalSinceNow)
-            try? await Task.sleep(nanoseconds: UInt64(delayUntilStart * 1_000_000_000))
+            let delayUntilEnd = max(0, event.endTime.timeIntervalSinceNow)
+            try? await Task.sleep(nanoseconds: UInt64(delayUntilEnd * 1_000_000_000))
             guard !Task.isCancelled else { return }
 
             await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate)
@@ -541,12 +594,34 @@ private struct WelcomeOnboardingView: View {
                 WelcomeFeatureRow(systemImage: "timer", title: "Arrive on time", detail: "Live cues appear before class.")
             }
             .padding(18)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(0.96),
+                                AppTheme.cream.opacity(0.90),
+                                AppTheme.sky.opacity(0.62)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(.white.opacity(0.68), lineWidth: 1)
+                    .stroke(.white.opacity(0.86), lineWidth: 1)
             }
-            .shadow(color: AppTheme.navy.opacity(0.07), radius: 18, y: 12)
+            .overlay(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(AppTheme.blue.opacity(0.06), lineWidth: 8)
+                    .blur(radius: 10)
+                    .offset(x: -2, y: -2)
+                    .mask(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    )
+            }
+            .shadow(color: AppTheme.navy.opacity(0.06), radius: 18, y: 12)
 
             Spacer(minLength: 32)
 
@@ -697,12 +772,34 @@ private struct ProfileSetupView: View {
                 )
             }
             .padding(22)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(0.96),
+                                AppTheme.cream.opacity(0.90),
+                                AppTheme.sky.opacity(0.62)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(.white.opacity(0.66), lineWidth: 1)
+                    .stroke(.white.opacity(0.86), lineWidth: 1)
             }
-            .shadow(color: AppTheme.navy.opacity(0.12), radius: 28, y: 16)
+            .overlay(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(AppTheme.blue.opacity(0.06), lineWidth: 8)
+                    .blur(radius: 10)
+                    .offset(x: -2, y: -2)
+                    .mask(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    )
+            }
+            .shadow(color: AppTheme.navy.opacity(0.06), radius: 18, y: 12)
             .padding(.horizontal, 20)
 
             Spacer(minLength: 38)
@@ -1143,11 +1240,14 @@ private struct ReminderSettingsCard: View {
 
     @Binding var leadMinutes: Int
     @Binding var alertCueMinutes: Int
+    @Binding var isPaused: Bool
     let rescheduleAction: () -> Void
 
     var body: some View {
         ActionPanel(title: "Live Activity Settings", subtitle: "Choose when the lock screen and island appear") {
             VStack(spacing: 14) {
+                LiveActivityPauseControl(isPaused: $isPaused)
+
                 HStack(alignment: .firstTextBaseline) {
                     Text("Before class")
                         .font(OnboardingFont.medium(15))
@@ -1211,12 +1311,77 @@ private struct ReminderSettingsCard: View {
                 .padding(.top, 2)
 
                 SecondaryActionButton(
-                    title: "Update Live Activity",
-                    systemImage: "timer",
-                    action: rescheduleAction
+                    title: isPaused ? "Resume Live Activity" : "Update Live Activity",
+                    systemImage: isPaused ? "play.fill" : "timer",
+                    action: {
+                        if isPaused {
+                            withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                                isPaused = false
+                            }
+                        } else {
+                            rescheduleAction()
+                        }
+                    }
                 )
             }
         }
+    }
+}
+
+private struct LiveActivityPauseControl: View {
+    @Binding var isPaused: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                isPaused.toggle()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isPaused ? "pause.circle.fill" : "sparkles")
+                    .font(.system(size: 18, weight: .semibold, design: .default))
+                    .foregroundStyle(isPaused ? AppTheme.secondaryText : AppTheme.blue)
+                    .frame(width: 34, height: 34)
+                    .background(.white.opacity(0.76), in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isPaused ? "Live Activities Paused" : "Live Activities On")
+                        .font(OnboardingFont.semibold(14))
+                        .foregroundStyle(AppTheme.primaryText)
+
+                    Text(isPaused ? "Schedule stays imported. Island stays off." : "Next class can appear on the island.")
+                        .font(OnboardingFont.regular(12))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
+
+                Spacer(minLength: 0)
+
+                Toggle("", isOn: $isPaused)
+                    .labelsHidden()
+                    .tint(AppTheme.blue)
+                    .allowsHitTesting(false)
+            }
+            .padding(12)
+            .background(
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.92),
+                        AppTheme.sky.opacity(isPaused ? 0.28 : 0.54)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isPaused ? AppTheme.border : AppTheme.blue.opacity(0.16), lineWidth: 1)
+            }
+        }
+        .buttonStyle(PressableButtonStyle())
+        .accessibilityLabel(isPaused ? "Resume Live Activities" : "Pause Live Activities")
     }
 }
 
@@ -1491,12 +1656,24 @@ private struct FloatingStatusToast: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.white)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.white.opacity(0.74), lineWidth: 1)
+                .stroke(AppTheme.blue.opacity(0.26), lineWidth: 1.2)
         }
-        .shadow(color: AppTheme.navy.opacity(0.14), radius: 20, y: 10)
+        .overlay(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AppTheme.blue.opacity(0.10), lineWidth: 8)
+                .blur(radius: 10)
+                .offset(x: -2, y: -2)
+                .mask(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                )
+        }
+        .shadow(color: AppTheme.navy.opacity(0.12), radius: 18, y: 12)
     }
 }
 

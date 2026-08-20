@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <img alt="Platform iOS" src="https://img.shields.io/badge/platform-iOS-0A66C2?style=for-the-badge">
-  <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-0A66C2?style=for-the-badge">
-  <img alt="Live Activities" src="https://img.shields.io/badge/Live%20Activities-ready-0A66C2?style=for-the-badge">
-  <img alt="iOS 17.6+" src="https://img.shields.io/badge/iOS-17.6%2B-0B2545?style=for-the-badge">
+  <img alt="Platform iOS" src="https://img.shields.io/badge/platform-iOS-0A66C2?style=flat">
+  <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-0A66C2?style=flat">
+  <img alt="Live Activities" src="https://img.shields.io/badge/Live%20Activities-ready-0A66C2?style=flat">
+  <img alt="iOS 17.6+" src="https://img.shields.io/badge/iOS-17.6%2B-0B2545?style=flat">
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 <p align="center">
   <img src="docs/readme/never-miss-class.png" alt="UTime onboarding screen on iPhone" width="31%">
   <img src="docs/readme/track-next-class.png" alt="UTime next class screen on iPhone" width="31%">
-  <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="31%">
+  <img src="docs/readme/customize-alerts.png" alt="UTime live activity settings" width="31%">
 </p>
 
 ## Why UTime
@@ -39,7 +39,7 @@ UTime turns a static university calendar export into a live class companion:
 ## iOS Experience
 
 <p align="center">
-  <img src="docs/readme/customize-alerts.png" alt="UTime live activity settings" width="45%">
+  <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">
   <img src="docs/readme/dynamic-island.png" alt="UTime Dynamic Island compact class update" width="45%">
 </p>
 
@@ -97,6 +97,14 @@ For Live Activities, use a device or simulator/runtime that supports ActivityKit
 3. Set how early Live Activities should appear.
 4. Let UTime surface the next class before it starts.
 
+## Privacy
+
+Read the UTime privacy policy at [jamieryu.com/UTime/privacy](https://jamieryu.com/UTime/privacy/index.html).
+
 ## Notes
 
 UTime is designed for University of Toronto timetable exports. Other `.ics` calendars may import successfully, but the course, section, room, and delivery-mode parsing is tuned for U of T class data.
+
+## Copyright
+
+Copyright (c) 2026 Jamie Ryu. All rights reserved.

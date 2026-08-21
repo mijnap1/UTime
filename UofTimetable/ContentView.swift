@@ -6,6 +6,7 @@
 import ActivityKit
 import SwiftData
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 private let calendarFileType = UTType(filenameExtension: "ics") ?? .data
@@ -29,66 +30,76 @@ struct ContentView: View {
     @State private var islandTask: Task<Void, Never>?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 12) {
-                    AppHeaderView(
-                        hasSchedule: !courseEvents.isEmpty,
-                        profileName: studentDisplayName
-                    )
-
-                    if let nextEvent = upcomingEvents.first {
-                        NextClassCard(event: nextEvent)
-                    }
-
-                    ImportScheduleCard(
-                        importedCount: courseEvents.count,
-                        importAction: { isImportingSchedule = true }
-                    )
-
-                    ReminderSettingsCard(
-                        leadMinutes: $reminderLeadMinutes,
-                        alertCueMinutes: $alertCueMinutes,
-                        isPaused: $isLiveActivityPaused
-                    ) {
-                        applyReminderSettings()
-                    }
-
-                    ScheduleListCard(
-                        events: upcomingEvents,
-                        deleteAction: deleteEvent,
-                        clearAction: clearSchedule
-                    )
+        Group {
+            if !hasCompletedProfileSetup || isShowingProfileSetup {
+                OnboardingFlowView(
+                    displayName: $studentDisplayName,
+                    campus: $studentCampus,
+                    major: $studentMajor,
+                    year: $studentYear
+                ) {
+                    hasCompletedProfileSetup = true
+                    isShowingProfileSetup = false
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 16)
-                .padding(.bottom, 28)
+            } else {
+                NavigationStack {
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            AppHeaderView(
+                                hasSchedule: !courseEvents.isEmpty,
+                                profileName: studentDisplayName
+                            )
+
+                            if let nextEvent = upcomingEvents.first {
+                                NextClassCard(event: nextEvent)
+                            }
+
+                            ImportScheduleCard(
+                                importedCount: courseEvents.count,
+                                importAction: { isImportingSchedule = true }
+                            )
+
+                            ReminderSettingsCard(
+                                leadMinutes: $reminderLeadMinutes,
+                                alertCueMinutes: $alertCueMinutes,
+                                isPaused: $isLiveActivityPaused
+                            ) {
+                                applyReminderSettings()
+                            }
+
+                            ScheduleListCard(
+                                events: upcomingEvents,
+                                deleteAction: deleteEvent,
+                                clearAction: clearSchedule
+                            )
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.top, 16)
+                        .padding(.bottom, 28)
+                    }
+                    .background(AppTheme.background.ignoresSafeArea())
+                    .toolbar(.hidden, for: .navigationBar)
+                }
+                .overlay(alignment: .top) {
+                    if let toastMessage {
+                        FloatingStatusToast(message: toastMessage)
+                            .padding(.horizontal, 18)
+                            .padding(.top, 10)
+                            .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.98)))
+                            .zIndex(1)
+                    }
+                }
+                .fileImporter(
+                    isPresented: $isImportingSchedule,
+                    allowedContentTypes: [calendarFileType],
+                    allowsMultipleSelection: false,
+                    onCompletion: handleFileImport
+                )
             }
-            .background(AppTheme.background.ignoresSafeArea())
-            .toolbar(.hidden, for: .navigationBar)
         }
-        .overlay(alignment: .top) {
-            if let toastMessage {
-                FloatingStatusToast(message: toastMessage)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 10)
-                    .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.98)))
-                    .zIndex(1)
-            }
-        }
-        .fileImporter(
-            isPresented: $isImportingSchedule,
-            allowedContentTypes: [calendarFileType],
-            allowsMultipleSelection: false,
-            onCompletion: handleFileImport
-        )
         .onAppear {
             clampAlertCueMinutes()
             restartIslandScheduler()
-
-            if !hasCompletedProfileSetup {
-                isShowingProfileSetup = true
-            }
         }
         .onChange(of: reminderLeadMinutes) { _, newValue in
             reminderLeadMinutes = min(max(newValue, 1), 60)
@@ -100,17 +111,6 @@ struct ContentView: View {
         }
         .onChange(of: isLiveActivityPaused) { _, _ in
             applyReminderSettings()
-        }
-        .fullScreenCover(isPresented: $isShowingProfileSetup) {
-            OnboardingFlowView(
-                displayName: $studentDisplayName,
-                campus: $studentCampus,
-                major: $studentMajor,
-                year: $studentYear
-            ) {
-                hasCompletedProfileSetup = true
-                isShowingProfileSetup = false
-            }
         }
     }
 
@@ -725,6 +725,42 @@ private struct ProfileSetupView: View {
     @FocusState private var isTextFieldFocused: Bool
 
     private let campuses = ["St. George", "UTM", "UTSC"]
+    private let programs = [
+        "Accounting",
+        "Architecture",
+        "Art History",
+        "Biochemistry",
+        "Biology",
+        "Business",
+        "Chemistry",
+        "Commerce",
+        "Computer Science",
+        "Criminology",
+        "Economics",
+        "Education",
+        "Engineering",
+        "English",
+        "Environmental Science",
+        "Finance",
+        "Global Affairs",
+        "History",
+        "Life Sciences",
+        "Linguistics",
+        "Math & Statistics",
+        "Media Studies",
+        "Music",
+        "Neuroscience",
+        "Nursing",
+        "Philosophy",
+        "Physical Sciences",
+        "Political Science",
+        "Psychology",
+        "Rotman Commerce",
+        "Social Sciences",
+        "Sociology",
+        "Visual Studies",
+        "Other"
+    ]
     private let years = ["1st year", "2nd year", "3rd year", "4th year", "Graduate"]
 
     var body: some View {
@@ -812,6 +848,10 @@ private struct ProfileSetupView: View {
             if year.isEmpty {
                 year = years[0]
             }
+
+            if major.isEmpty {
+                major = programs[0]
+            }
         }
     }
 
@@ -830,14 +870,12 @@ private struct ProfileSetupView: View {
         case 1:
             OptionGrid(options: campuses, selection: $campus)
         case 2:
-            OnboardingTextField(
+            OnboardingDropdownField(
                 title: "Program",
-                placeholder: "",
-                text: $major,
+                selection: $major,
+                options: programs,
                 systemImage: "graduationcap.fill"
             )
-            .focused($isTextFieldFocused)
-            .onAppear { isTextFieldFocused = true }
         default:
             OptionGrid(options: years, selection: $year)
         }
@@ -1033,6 +1071,71 @@ private struct OnboardingTextField: View {
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(AppTheme.blue.opacity(0.20), lineWidth: 1)
+            }
+        }
+    }
+}
+
+private struct OnboardingDropdownField: View {
+    let title: String
+    @Binding var selection: String
+    let options: [String]
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(OnboardingFont.medium(13))
+                .foregroundStyle(AppTheme.secondaryText)
+
+            Menu {
+                ForEach(options, id: \.self) { option in
+                    Button {
+                        var transaction = Transaction()
+                        transaction.animation = nil
+
+                        withTransaction(transaction) {
+                            selection = option
+                        }
+                    } label: {
+                        if selection == option {
+                            Label(option, systemImage: "checkmark")
+                        } else {
+                            Text(option)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .semibold, design: .default))
+                        .foregroundStyle(AppTheme.blue)
+                        .frame(width: 20)
+
+                    Text(selection)
+                        .font(OnboardingFont.regular(17))
+                        .foregroundStyle(AppTheme.primaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .semibold, design: .default))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 52)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppTheme.blue.opacity(0.20), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            .transaction { transaction in
+                transaction.animation = nil
             }
         }
     }
@@ -1505,30 +1608,21 @@ private struct SwipeToDeleteRow<Content: View>: View {
             .buttonStyle(.plain)
 
             content
-                .offset(x: offset)
-                .onTapGesture {
-                    close()
-                }
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 12, coordinateSpace: .local)
-                        .onChanged { value in
-                            if !isTrackingHorizontalDrag {
-                                let horizontal = abs(value.translation.width)
-                                let vertical = abs(value.translation.height)
-
-                                guard horizontal > 10 || vertical > 10 else { return }
-                                guard horizontal > vertical * 1.35 else { return }
-
-                                isTrackingHorizontalDrag = true
-                                dragStartOffset = offset
-                            }
-
+                .overlay {
+                    HorizontalSwipeGestureView(
+                        isTapEnabled: offset != 0,
+                        onTap: close,
+                        onBegan: {
+                            isTrackingHorizontalDrag = true
+                            dragStartOffset = offset
+                        },
+                        onChanged: { translation in
                             guard isTrackingHorizontalDrag else { return }
 
-                            let nextOffset = dragStartOffset + value.translation.width
+                            let nextOffset = dragStartOffset + translation
                             offset = min(0, max(-deleteWidth, nextOffset))
-                        }
-                        .onEnded { value in
+                        },
+                        onEnded: { translation, velocity in
                             defer {
                                 isTrackingHorizontalDrag = false
                                 dragStartOffset = 0
@@ -1536,14 +1630,17 @@ private struct SwipeToDeleteRow<Content: View>: View {
 
                             guard isTrackingHorizontalDrag else { return }
 
-                            let predictedOffset = dragStartOffset + value.predictedEndTranslation.width
-                            let shouldOpen = predictedOffset < -deleteWidth * 0.52 || offset < -deleteWidth * 0.62
+                            let projectedOffset = dragStartOffset + translation + velocity * 0.12
+                            let shouldOpen = projectedOffset < -deleteWidth * 0.52 || offset < -deleteWidth * 0.62
 
                             withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.82, blendDuration: 0.08)) {
                                 offset = shouldOpen ? -deleteWidth : 0
                             }
                         }
-                )
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .offset(x: offset)
         }
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.92, blendDuration: 0.06), value: offset)
@@ -1554,6 +1651,81 @@ private struct SwipeToDeleteRow<Content: View>: View {
 
         withAnimation(.interactiveSpring(response: 0.30, dampingFraction: 0.9, blendDuration: 0.06)) {
             offset = 0
+        }
+    }
+}
+
+private struct HorizontalSwipeGestureView: UIViewRepresentable {
+    let isTapEnabled: Bool
+    let onTap: () -> Void
+    let onBegan: () -> Void
+    let onChanged: (CGFloat) -> Void
+    let onEnded: (CGFloat, CGFloat) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.backgroundColor = .clear
+
+        let panGesture = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
+        panGesture.cancelsTouchesInView = false
+        panGesture.delegate = context.coordinator
+        view.addGestureRecognizer(panGesture)
+
+        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        tapGesture.cancelsTouchesInView = false
+        tapGesture.delegate = context.coordinator
+        view.addGestureRecognizer(tapGesture)
+
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: HorizontalSwipeGestureView
+
+        init(parent: HorizontalSwipeGestureView) {
+            self.parent = parent
+        }
+
+        @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            guard let view = recognizer.view else { return }
+
+            switch recognizer.state {
+            case .began:
+                parent.onBegan()
+            case .changed:
+                parent.onChanged(recognizer.translation(in: view).x)
+            case .ended, .cancelled, .failed:
+                parent.onEnded(recognizer.translation(in: view).x, recognizer.velocity(in: view).x)
+            default:
+                break
+            }
+        }
+
+        @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
+            guard recognizer.state == .ended, parent.isTapEnabled else { return }
+            parent.onTap()
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            if gestureRecognizer is UITapGestureRecognizer {
+                return parent.isTapEnabled
+            }
+
+            guard let panGesture = gestureRecognizer as? UIPanGestureRecognizer,
+                  let view = gestureRecognizer.view else {
+                return false
+            }
+
+            let velocity = panGesture.velocity(in: view)
+            return abs(velocity.x) > 40 && abs(velocity.x) > abs(velocity.y) * 1.35
         }
     }
 }

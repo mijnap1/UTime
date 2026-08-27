@@ -532,12 +532,12 @@ private struct HomeBottomNavigation: View {
             }
         }
         .padding(6)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(AppTheme.surface.opacity(0.96), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.72), lineWidth: 1)
+                .stroke(AppTheme.border.opacity(0.9), lineWidth: 1)
         }
-        .shadow(color: AppTheme.navy.opacity(0.12), radius: 18, y: 10)
+        .shadow(color: AppTheme.navy.opacity(0.08), radius: 18, y: 10)
     }
 }
 

@@ -20,9 +20,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/readme/never-miss-class.png" alt="UTime onboarding screen on iPhone" width="31%">
-  <img src="docs/readme/track-next-class.png" alt="UTime next class screen on iPhone" width="31%">
-  <img src="docs/readme/customize-alerts.png" alt="UTime live activity settings" width="31%">
+  <img src="docs/readme/track-next-class.png" alt="UTime Today screen on iPhone" width="31%">
+  <img src="docs/readme/manage-class-schedule.png" alt="UTime schedule import and class list screen" width="31%">
+  <img src="docs/readme/customize-alerts.png" alt="UTime live alert settings screen" width="31%">
 </p>
 
 ## Why UTime

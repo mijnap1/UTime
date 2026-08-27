@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  UTime is a clean iOS timetable companion for University of Toronto students. Import your `.ics` schedule once, then see your next class, room, and timing where it matters most: in the app, on the Lock Screen, and in the Dynamic Island.
+  UTime is a clean iOS timetable companion for University of Toronto students. Import your `.ics` schedule once, then use Today, Schedule, Alerts, and Profile sections to keep your next class, room, and timing close at hand.
 </p>
 
 <p align="center">
@@ -29,12 +29,14 @@
 
 UTime turns a static university calendar export into a live class companion:
 
+- Navigate quickly with dedicated Today, Schedule, Alerts, and Profile sections.
+- Track the next class from a focused Today view with a daily snapshot.
 - Import a U of T `.ics` timetable and expand recurring weekly classes.
-- See the next class with course code, section, delivery mode, room, and start time.
+- Manage imported classes from a Schedule view with replace, clear, and swipe-to-delete controls.
+- Tune Live Activity timing and red-alert cues before class.
 - Show class updates through Lock Screen Live Activities.
 - Keep the Dynamic Island focused on the class and room you need next.
-- Tune reminder timing and red-alert cues before class.
-- Replace or clear an imported schedule whenever your timetable changes.
+- Review your local student profile without creating an account.
 
 ## iOS Experience
 
@@ -45,10 +47,12 @@ UTime turns a static university calendar export into a live class companion:
 
 UTime is built around native iPhone surfaces instead of another calendar view to check:
 
-- **In-app schedule** for upcoming classes and timetable import.
+- **Today view** for the next class, room, and day snapshot.
+- **Schedule view** for timetable import, replacement, clearing, and class management.
+- **Alerts view** for Live Activity start timing and red-alert cues.
+- **Profile view** for local student context.
 - **Lock Screen updates** for class countdown, start time, and room.
 - **Dynamic Island glance** for compact course and room context.
-- **Local schedule storage** with SwiftData.
 - **Live Activity sync plumbing** for remote update support.
 
 ## Calendar Import
@@ -93,9 +97,10 @@ For Live Activities, use a device or simulator/runtime that supports ActivityKit
 ## Import A Timetable
 
 1. Export your timetable as an `.ics` calendar file.
-2. Open UTime and choose **Import .ics File**.
-3. Set how early Live Activities should appear.
-4. Let UTime surface the next class before it starts.
+2. Open UTime and choose **Schedule**.
+3. Import or replace the `.ics` file.
+4. Open **Alerts** to set how early Live Activities and red cues should appear.
+5. Let UTime surface the next class before it starts.
 
 ## Privacy
 

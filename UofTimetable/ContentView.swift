@@ -28,6 +28,7 @@ struct ContentView: View {
     @State private var toastMessage: String?
     @State private var toastTask: Task<Void, Never>?
     @State private var islandTask: Task<Void, Never>?
+    @State private var selectedHomeSection = HomeSection.today
 
     var body: some View {
         Group {
@@ -45,40 +46,32 @@ struct ContentView: View {
                 NavigationStack {
                     ScrollView {
                         VStack(spacing: 12) {
-                            AppHeaderView(
-                                hasSchedule: !courseEvents.isEmpty,
-                                profileName: studentDisplayName
-                            )
-
-                            if let nextEvent = upcomingEvents.first {
-                                NextClassCard(event: nextEvent)
-                            }
-
-                            ImportScheduleCard(
-                                importedCount: courseEvents.count,
-                                importAction: { isImportingSchedule = true }
-                            )
-
-                            ReminderSettingsCard(
-                                leadMinutes: $reminderLeadMinutes,
-                                alertCueMinutes: $alertCueMinutes,
-                                isPaused: $isLiveActivityPaused
-                            ) {
-                                applyReminderSettings()
-                            }
-
-                            ScheduleListCard(
-                                events: upcomingEvents,
-                                deleteAction: deleteEvent,
-                                clearAction: clearSchedule
-                            )
+                            selectedSectionContent
                         }
                         .padding(.horizontal, 18)
                         .padding(.top, 16)
-                        .padding(.bottom, 28)
+                        .padding(.bottom, 22)
                     }
                     .background(AppTheme.background.ignoresSafeArea())
                     .toolbar(.hidden, for: .navigationBar)
+                    .safeAreaInset(edge: .bottom) {
+                        HomeBottomNavigation(selectedSection: $selectedHomeSection)
+                            .padding(.horizontal, 18)
+                            .padding(.top, 10)
+                            .padding(.bottom, 8)
+                            .background {
+                                LinearGradient(
+                                    colors: [
+                                        AppTheme.background.opacity(0),
+                                        AppTheme.background.opacity(0.92),
+                                        AppTheme.background
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .ignoresSafeArea()
+                            }
+                    }
                 }
                 .overlay(alignment: .top) {
                     if let toastMessage {
@@ -116,6 +109,69 @@ struct ContentView: View {
 
     private var upcomingEvents: [CourseEvent] {
         courseEvents.filter { $0.endTime > Date() }
+    }
+
+    private var todayEvents: [CourseEvent] {
+        upcomingEvents.filter { Calendar.current.isDateInToday($0.startTime) }
+    }
+
+    @ViewBuilder
+    private var selectedSectionContent: some View {
+        switch selectedHomeSection {
+        case .today:
+            AppHeaderView(
+                hasSchedule: !courseEvents.isEmpty,
+                profileName: studentDisplayName
+            )
+
+            if let nextEvent = upcomingEvents.first {
+                NextClassCard(event: nextEvent)
+            } else {
+                EmptyNextClassCard(importAction: { isImportingSchedule = true })
+            }
+
+            DaySnapshotCard(
+                todayCount: todayEvents.count,
+                upcomingCount: upcomingEvents.count,
+                leadMinutes: reminderLeadMinutes,
+                isPaused: isLiveActivityPaused
+            )
+        case .schedule:
+            ImportScheduleCard(
+                importedCount: courseEvents.count,
+                importAction: { isImportingSchedule = true }
+            )
+
+            ScheduleListCard(
+                events: upcomingEvents,
+                deleteAction: deleteEvent,
+                clearAction: clearSchedule
+            )
+        case .alerts:
+            ReminderSettingsCard(
+                leadMinutes: $reminderLeadMinutes,
+                alertCueMinutes: $alertCueMinutes,
+                isPaused: $isLiveActivityPaused
+            ) {
+                applyReminderSettings()
+            }
+
+            AlertStatusCard(
+                upcomingCount: upcomingEvents.count,
+                leadMinutes: reminderLeadMinutes,
+                alertCueMinutes: alertCueMinutes,
+                isPaused: isLiveActivityPaused
+            )
+        case .profile:
+            ProfileSummaryCard(
+                displayName: studentDisplayName,
+                campus: studentCampus,
+                major: studentMajor,
+                year: studentYear,
+                importedCount: courseEvents.count,
+                editAction: { isShowingProfileSetup = true }
+            )
+        }
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
@@ -413,6 +469,76 @@ struct ContentView: View {
         }
     }
 
+}
+
+private enum HomeSection: String, CaseIterable, Identifiable {
+    case today
+    case schedule
+    case alerts
+    case profile
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .today: return "Today"
+        case .schedule: return "Schedule"
+        case .alerts: return "Alerts"
+        case .profile: return "Profile"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .today: return "house.fill"
+        case .schedule: return "calendar"
+        case .alerts: return "timer"
+        case .profile: return "person.crop.circle"
+        }
+    }
+}
+
+private struct HomeBottomNavigation: View {
+    @Binding var selectedSection: HomeSection
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(HomeSection.allCases) { section in
+                Button {
+                    selectedSection = section
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: section.systemImage)
+                            .font(.system(size: 16, weight: .semibold, design: .default))
+                            .frame(height: 18)
+
+                        Text(section.title)
+                            .font(OnboardingFont.semibold(11))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+                    .foregroundStyle(selectedSection == section ? AppTheme.blue : AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(
+                        selectedSection == section ? AppTheme.blue.opacity(0.10) : .clear,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .animation(.spring(response: 0.22, dampingFraction: 0.9), value: selectedSection)
+                }
+                .buttonStyle(PressableButtonStyle())
+                .accessibilityLabel(section.title)
+            }
+        }
+        .padding(6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.72), lineWidth: 1)
+        }
+        .shadow(color: AppTheme.navy.opacity(0.12), radius: 18, y: 10)
+    }
 }
 
 private struct AppHeaderView: View {
@@ -1283,6 +1409,100 @@ private struct NextClassCard: View {
     }
 }
 
+private struct EmptyNextClassCard: View {
+    let importAction: () -> Void
+
+    var body: some View {
+        ActionPanel(title: "Next Class", subtitle: "Nothing upcoming yet") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "calendar.badge.plus")
+                        .font(.system(size: 18, weight: .semibold, design: .default))
+                        .foregroundStyle(AppTheme.blue)
+                        .frame(width: 36, height: 36)
+                        .background(AppTheme.blue.opacity(0.10), in: Circle())
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Import your timetable")
+                            .font(OnboardingFont.semibold(15))
+                            .foregroundStyle(AppTheme.primaryText)
+
+                        Text("Your next room appears here.")
+                            .font(OnboardingFont.regular(13))
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                PrimaryActionButton(
+                    title: "Import .ics File",
+                    systemImage: "square.and.arrow.down",
+                    action: importAction
+                )
+            }
+        }
+    }
+}
+
+private struct DaySnapshotCard: View {
+    let todayCount: Int
+    let upcomingCount: Int
+    let leadMinutes: Int
+    let isPaused: Bool
+
+    var body: some View {
+        ActionPanel(title: "Day Snapshot", subtitle: snapshotSubtitle) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+                SnapshotMetricPill(value: "\(todayCount)", label: "Today", systemImage: "sun.max.fill", tint: AppTheme.blue)
+                SnapshotMetricPill(value: "\(upcomingCount)", label: "Upcoming", systemImage: "calendar", tint: AppTheme.navy)
+                SnapshotMetricPill(value: "\(leadMinutes)", label: "Min before", systemImage: "timer", tint: AppTheme.blue)
+                SnapshotMetricPill(value: isPaused ? "Off" : "On", label: "Island", systemImage: isPaused ? "pause.fill" : "sparkles", tint: isPaused ? AppTheme.secondaryText : AppTheme.red)
+            }
+        }
+    }
+
+    private var snapshotSubtitle: String {
+        todayCount == 0 ? "A calmer view until your next class" : "\(todayCount) class\(todayCount == 1 ? "" : "es") left today"
+    }
+}
+
+private struct SnapshotMetricPill: View {
+    let value: String
+    let label: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold, design: .default))
+                .foregroundStyle(tint)
+                .frame(width: 26, height: 26)
+                .background(tint.opacity(0.10), in: Circle())
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(value)
+                    .font(OnboardingFont.semibold(17).monospacedDigit())
+                    .foregroundStyle(AppTheme.navy)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                Text(label)
+                    .font(OnboardingFont.regular(12))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 58)
+        .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
 private struct ImportScheduleCard: View {
     let importedCount: Int
     let importAction: () -> Void
@@ -1528,6 +1748,64 @@ private struct AlertCueButton: View {
     }
 }
 
+private struct AlertStatusCard: View {
+    let upcomingCount: Int
+    let leadMinutes: Int
+    let alertCueMinutes: Int
+    let isPaused: Bool
+
+    var body: some View {
+        ActionPanel(title: "Alert Status", subtitle: isPaused ? "Paused until you resume it" : "Ready for your imported classes") {
+            VStack(spacing: 10) {
+                StatusRow(
+                    systemImage: isPaused ? "pause.circle.fill" : "checkmark.circle.fill",
+                    title: isPaused ? "Live Activities paused" : "Live Activities active",
+                    detail: isPaused ? "Your schedule is saved, but island updates are off." : "\(upcomingCount) upcoming class\(upcomingCount == 1 ? "" : "es") can trigger updates.",
+                    tint: isPaused ? AppTheme.secondaryText : AppTheme.blue
+                )
+
+                StatusRow(
+                    systemImage: "exclamationmark.circle.fill",
+                    title: "Red cue",
+                    detail: "Turns red \(alertCueMinutes) min before class, after the \(leadMinutes) min island start.",
+                    tint: AppTheme.red
+                )
+            }
+        }
+    }
+}
+
+private struct StatusRow: View {
+    let systemImage: String
+    let title: String
+    let detail: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .semibold, design: .default))
+                .foregroundStyle(tint)
+                .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(OnboardingFont.semibold(14))
+                    .foregroundStyle(AppTheme.primaryText)
+
+                Text(detail)
+                    .font(OnboardingFont.regular(13))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
 private struct ScheduleListCard: View {
     let events: [CourseEvent]
     let deleteAction: (CourseEvent) -> Void
@@ -1568,6 +1846,70 @@ private struct ScheduleListCard: View {
 
     private var subtitle: String {
         events.isEmpty ? "Imported classes will appear here" : "\(events.count) future classes imported"
+    }
+}
+
+private struct ProfileSummaryCard: View {
+    let displayName: String
+    let campus: String
+    let major: String
+    let year: String
+    let importedCount: Int
+    let editAction: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ActionPanel(title: profileTitle, subtitle: "Your local UTime profile") {
+                VStack(spacing: 10) {
+                    ProfileInfoRow(systemImage: "building.columns.fill", title: "Campus", value: campus)
+                    ProfileInfoRow(systemImage: "graduationcap.fill", title: "Program", value: major)
+                    ProfileInfoRow(systemImage: "person.text.rectangle.fill", title: "Year", value: year)
+                    ProfileInfoRow(systemImage: "calendar", title: "Imported", value: "\(importedCount) class\(importedCount == 1 ? "" : "es")")
+                }
+            }
+
+            SecondaryActionButton(
+                title: "Edit Profile",
+                systemImage: "pencil",
+                action: editAction
+            )
+        }
+    }
+
+    private var profileTitle: String {
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? "Profile" : trimmedName
+    }
+}
+
+private struct ProfileInfoRow: View {
+    let systemImage: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold, design: .default))
+                .foregroundStyle(AppTheme.blue)
+                .frame(width: 28, height: 28)
+                .background(AppTheme.blue.opacity(0.09), in: Circle())
+
+            Text(title)
+                .font(OnboardingFont.medium(13))
+                .foregroundStyle(AppTheme.secondaryText)
+
+            Spacer(minLength: 10)
+
+            Text(value.isEmpty ? "Not set" : value)
+                .font(OnboardingFont.semibold(13))
+                .foregroundStyle(AppTheme.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 46)
+        .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

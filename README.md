@@ -38,9 +38,9 @@ The app is organized around a bottom navigation bar with four focused sections:
 - **Alerts** controls when Live Activities appear and when urgent cues should start.
 - **Profile** keeps local student context and app actions in one quiet place.
 
-## v1.2 Highlights
+## v1.3 Highlights
 
-Version `1.2` focuses on making the app feel more complete and easier to move through:
+Version `1.3` focuses on making the app feel more complete and easier to move through:
 
 - Added a persistent bottom navigation bar for clearer app sections.
 - Refined the **Today** page with a focused next-class card and a cleaner overview panel.

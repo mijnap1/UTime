@@ -6,6 +6,7 @@
 import ActivityKit
 import SwiftData
 import SwiftUI
+import StoreKit
 import UIKit
 import UniformTypeIdentifiers
 
@@ -522,9 +523,9 @@ private struct HomeBottomNavigation: View {
                     .frame(height: 56)
                     .background(
                         selectedSection == section ? AppTheme.blue.opacity(0.10) : .clear,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        in: RoundedRectangle(cornerRadius: 24, style: .continuous)
                     )
-                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .animation(.spring(response: 0.22, dampingFraction: 0.9), value: selectedSection)
                 }
                 .buttonStyle(PressableButtonStyle())
@@ -565,9 +566,7 @@ private struct AppHeaderView: View {
                     .multilineTextAlignment(.center)
             }
 
-            Text(headerCopy)
-                .font(OnboardingFont.regular(14))
-                .foregroundStyle(AppTheme.secondaryText)
+            headerCopy
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .padding(.horizontal, 8)
@@ -620,14 +619,24 @@ private struct AppHeaderView: View {
         }
     }
 
-    private var headerCopy: String {
+    private var headerCopy: Text {
         let trimmedName = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if hasSchedule, !trimmedName.isEmpty {
-            return "Ready for your next class, \(trimmedName). UTime keeps your timetable on your iPhone and uses limited Live Activity data for lock screen updates."
+            return Text("Ready for your next class, ")
+                .font(OnboardingFont.regular(14))
+                .foregroundColor(AppTheme.secondaryText)
+            + Text(trimmedName)
+                .font(OnboardingFont.semibold(14))
+                .foregroundColor(AppTheme.secondaryText)
+            + Text(". UTime keeps your timetable on your iPhone and brings class updates to your Lock Screen.")
+                .font(OnboardingFont.regular(14))
+                .foregroundColor(AppTheme.secondaryText)
         }
 
-        return "Import your timetable once. UTime keeps your classes ready and brings the next room to your Lock Screen."
+        return Text("Import your timetable once. UTime keeps your classes ready and brings the next room to your Lock Screen.")
+            .font(OnboardingFont.regular(14))
+            .foregroundColor(AppTheme.secondaryText)
     }
 }
 
@@ -1452,18 +1461,18 @@ private struct DaySnapshotCard: View {
     let isPaused: Bool
 
     var body: some View {
-        ActionPanel(title: "Day Snapshot", subtitle: snapshotSubtitle) {
+        ActionPanel(title: "Today Overview", subtitle: snapshotSubtitle) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
                 SnapshotMetricPill(value: "\(todayCount)", label: "Today", systemImage: "sun.max.fill", tint: AppTheme.blue)
                 SnapshotMetricPill(value: "\(upcomingCount)", label: "Upcoming", systemImage: "calendar", tint: AppTheme.navy)
                 SnapshotMetricPill(value: "\(leadMinutes)", label: "Min before", systemImage: "timer", tint: AppTheme.blue)
-                SnapshotMetricPill(value: isPaused ? "Off" : "On", label: "Island", systemImage: isPaused ? "pause.fill" : "sparkles", tint: isPaused ? AppTheme.secondaryText : AppTheme.red)
+                SnapshotMetricPill(value: isPaused ? "Off" : "On", label: "Island", systemImage: isPaused ? "pause.fill" : "sparkles", tint: isPaused ? AppTheme.secondaryText : AppTheme.navy)
             }
         }
     }
 
     private var snapshotSubtitle: String {
-        todayCount == 0 ? "A calmer view until your next class" : "\(todayCount) class\(todayCount == 1 ? "" : "es") left today"
+        todayCount == 0 ? "Nothing else today" : "\(todayCount) class\(todayCount == 1 ? "" : "es") left today"
     }
 }
 
@@ -1681,10 +1690,7 @@ private struct LiveActivityPauseControl: View {
 
                 Spacer(minLength: 0)
 
-                Toggle("", isOn: $isPaused)
-                    .labelsHidden()
-                    .tint(AppTheme.blue)
-                    .allowsHitTesting(false)
+                LiveActivitySwitch(isOn: isPaused)
             }
             .padding(12)
             .background(
@@ -1705,6 +1711,25 @@ private struct LiveActivityPauseControl: View {
         }
         .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(isPaused ? "Resume Live Activities" : "Pause Live Activities")
+    }
+}
+
+private struct LiveActivitySwitch: View {
+    let isOn: Bool
+
+    var body: some View {
+        Capsule()
+            .fill(isOn ? AppTheme.blue : Color(red: 0.70, green: 0.75, blue: 0.78))
+            .frame(width: 52, height: 32)
+            .overlay(alignment: isOn ? .trailing : .leading) {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 28, height: 28)
+                    .padding(2)
+                    .shadow(color: AppTheme.navy.opacity(0.12), radius: 3, y: 1)
+            }
+            .animation(.spring(response: 0.24, dampingFraction: 0.9), value: isOn)
+            .accessibilityHidden(true)
     }
 }
 
@@ -1850,6 +1875,8 @@ private struct ScheduleListCard: View {
 }
 
 private struct ProfileSummaryCard: View {
+    @Environment(\.requestReview) private var requestReview
+
     let displayName: String
     let campus: String
     let major: String
@@ -1865,6 +1892,7 @@ private struct ProfileSummaryCard: View {
                     ProfileInfoRow(systemImage: "graduationcap.fill", title: "Program", value: major)
                     ProfileInfoRow(systemImage: "person.text.rectangle.fill", title: "Year", value: year)
                     ProfileInfoRow(systemImage: "calendar", title: "Imported", value: "\(importedCount) class\(importedCount == 1 ? "" : "es")")
+                    ReviewPromptRow(action: { requestReview() })
                 }
             }
 
@@ -1879,6 +1907,46 @@ private struct ProfileSummaryCard: View {
     private var profileTitle: String {
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedName.isEmpty ? "Profile" : trimmedName
+    }
+}
+
+private struct ReviewPromptRow: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "star")
+                    .font(.system(size: 14, weight: .semibold, design: .default))
+                    .foregroundStyle(AppTheme.blue)
+                    .frame(width: 28, height: 28)
+                    .background(AppTheme.blue.opacity(0.09), in: Circle())
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Rate UTime")
+                        .font(OnboardingFont.semibold(13))
+                        .foregroundStyle(AppTheme.primaryText)
+
+                    Text("Leave a quick App Store review")
+                        .font(OnboardingFont.regular(12))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 10)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold, design: .default))
+                    .foregroundStyle(AppTheme.secondaryText.opacity(0.65))
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 50)
+            .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressableButtonStyle())
+        .accessibilityLabel("Rate UTime on the App Store")
     }
 }
 
@@ -2117,8 +2185,8 @@ private struct ClassRow: View {
                     .foregroundStyle(AppTheme.primaryText)
                     .multilineTextAlignment(.trailing)
 
-                if !eventLocation.isEmpty {
-                    Text(eventLocation)
+                if !trailingDetail.isEmpty {
+                    Text(trailingDetail)
                         .font(OnboardingFont.medium(13))
                         .foregroundStyle(AppTheme.blue)
                         .lineLimit(1)
@@ -2146,6 +2214,21 @@ private struct ClassRow: View {
         [event.building, event.roomNumber]
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    private var trailingDetail: String {
+        if !eventLocation.isEmpty {
+            return eventLocation
+        }
+
+        switch event.deliveryMode.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "Asynchronous":
+            return "Async"
+        case "Online":
+            return "Sync"
+        default:
+            return ""
+        }
     }
 }
 

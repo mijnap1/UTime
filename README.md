@@ -5,7 +5,7 @@
 <h1 align="center">UTime</h1>
 
 <p align="center">
-  Your U of T timetable, ready before class.
+  A clean iOS timetable companion for University of Toronto students.
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  UTime is a clean iOS timetable companion for University of Toronto students. Import your `.ics` schedule once, then use Today, Schedule, Alerts, and Profile sections to keep your next class, room, and timing close at hand.
+  Import your <code>.ics</code> timetable once, then use <strong>Today</strong>, <strong>Schedule</strong>, <strong>Alerts</strong>, and <strong>Profile</strong> to keep your next class, room, delivery mode, and Live Activity timing close at hand.
 </p>
 
 <p align="center">
@@ -25,46 +25,92 @@
   <img src="docs/readme/customize-alerts.png" alt="UTime live alert settings screen" width="31%">
 </p>
 
-## Why UTime
+## Overview
 
-UTime turns a static university calendar export into a live class companion:
+UTime turns a static U of T calendar export into a practical class companion for iPhone. Instead of checking a full calendar every time you need a room, UTime focuses on the question students usually care about most:
 
-- Navigate quickly with dedicated Today, Schedule, Alerts, and Profile sections.
-- Track the next class from a focused Today view with a daily snapshot.
-- Import a U of T `.ics` timetable and expand recurring weekly classes.
-- Manage imported classes from a Schedule view with replace, clear, and swipe-to-delete controls.
-- Tune Live Activity timing and red-alert cues before class.
-- Show class updates through Lock Screen Live Activities.
-- Keep the Dynamic Island focused on the class and room you need next.
-- Review your local student profile without creating an account.
+**What is my next class, when does it start, and where do I need to go?**
 
-## iOS Experience
+The app is organized around a bottom navigation bar with four focused sections:
+
+- **Today** shows the next class, the room, and a compact overview of the day.
+- **Schedule** handles `.ics` import, replacement, clearing, and upcoming class management.
+- **Alerts** controls when Live Activities appear and when urgent cues should start.
+- **Profile** keeps local student context and app actions in one quiet place.
+
+## v1.2 Highlights
+
+Version `1.2` focuses on making the app feel more complete and easier to move through:
+
+- Added a persistent bottom navigation bar for clearer app sections.
+- Refined the **Today** page with a focused next-class card and a cleaner overview panel.
+- Expanded the **Schedule** page with import steps, upcoming classes, and clearer course metadata.
+- Added support for showing `Async` and `Sync` class types when a room is not available.
+- Improved **Alerts** with Live Activity timing, island controls, and red-alert cue settings.
+- Added a subtle **Rate UTime** action in Profile using Apple’s native App Store review prompt.
+- Updated README screenshots to match the current app screens.
+
+## Screenshots
 
 <p align="center">
   <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">
   <img src="docs/readme/dynamic-island.png" alt="UTime Dynamic Island compact class update" width="45%">
 </p>
 
-UTime is built around native iPhone surfaces instead of another calendar view to check:
+UTime is designed around native iPhone surfaces instead of becoming another heavy calendar screen. The app keeps the main interface calm, then uses Lock Screen and Dynamic Island surfaces when timing matters.
 
-- **Today view** for the next class, room, and day snapshot.
-- **Schedule view** for timetable import, replacement, clearing, and class management.
-- **Alerts view** for Live Activity start timing and red-alert cues.
-- **Profile view** for local student context.
-- **Lock Screen updates** for class countdown, start time, and room.
-- **Dynamic Island glance** for compact course and room context.
-- **Live Activity sync plumbing** for remote update support.
+## Core Features
+
+### Today
+
+The **Today** section is the main landing view. It highlights the next class with the course code, section details, start time, date, and room when one is available. Below that, the overview panel keeps the day readable with counts for classes today, upcoming classes, alert timing, and Dynamic Island status.
+
+### Schedule
+
+The **Schedule** section is where timetable data is imported and managed. UTime accepts an `.ics` file exported from a timetable, expands recurring classes, and displays future classes in a clean list. Imported schedules can be replaced or cleared without creating an account.
+
+### Alerts
+
+The **Alerts** section controls how early UTime starts Live Activity updates before class. It also lets users choose a red-alert cue, so the app can become more noticeable as the start time gets closer.
+
+### Profile
+
+The **Profile** section stores local student details such as campus, program, year, and imported class count. It also includes a small **Rate UTime** row for users who want to leave an App Store review, without turning the page into a promotion screen.
+
+## Live Activities
+
+UTime uses native iOS Live Activities to keep the next class visible when it matters most:
+
+- **Lock Screen** updates show the course, room or delivery mode, countdown, and start time.
+- **Dynamic Island** keeps the compact view focused on the course and room.
+- **Alert timing** can be adjusted so updates appear before class instead of at the last second.
+- **Red-alert cues** help make the final minutes before class easier to notice.
+
+The goal is not to mirror the whole schedule on the Lock Screen. UTime only surfaces the immediate next class, which keeps the experience focused and glanceable.
 
 ## Calendar Import
 
-The importer supports the calendar details U of T timetables commonly rely on:
+The importer is tuned for U of T timetable exports and supports the calendar details those files commonly rely on:
 
 - `DTSTART` / `DTEND`
 - weekly `RRULE` expansion
 - `COUNT`, `UNTIL`, `INTERVAL`, and `BYDAY`
 - `EXDATE` skipped classes
 - `RDATE` extra or makeup classes
-- async, online, and in-person metadata detection
+- in-person, async, and sync/online metadata detection
+
+When a class has a physical room, UTime shows the room. When a class has no room but includes online delivery metadata, UTime can show `Async` or `Sync` instead, keeping the schedule readable without blank trailing details.
+
+## Privacy and Data
+
+UTime is built around local timetable use:
+
+- Student profile details stay on device.
+- Imported class data is used to power the app’s schedule and Live Activity views.
+- No account is required to import or view a timetable.
+- Live Activity support uses only the data needed to show class updates.
+
+Read the full privacy policy at [jamieryu.com/UTime/privacy](https://jamieryu.com/UTime/privacy/index.html).
 
 ## Tech Stack
 
@@ -94,7 +140,7 @@ privacy/               Privacy policy page
 
 For Live Activities, use a device or simulator/runtime that supports ActivityKit.
 
-## Import A Timetable
+## Import a Timetable in the App
 
 1. Export your timetable as an `.ics` calendar file.
 2. Open UTime and choose **Schedule**.
@@ -102,13 +148,11 @@ For Live Activities, use a device or simulator/runtime that supports ActivityKit
 4. Open **Alerts** to set how early Live Activities and red cues should appear.
 5. Let UTime surface the next class before it starts.
 
-## Privacy
-
-Read the UTime privacy policy at [jamieryu.com/UTime/privacy](https://jamieryu.com/UTime/privacy/index.html).
-
 ## Notes
 
-UTime is designed for University of Toronto timetable exports. Other `.ics` calendars may import successfully, but the course, section, room, and delivery-mode parsing is tuned for U of T class data.
+UTime is designed for University of Toronto timetable exports. Other `.ics` calendars may import successfully, but the course, section, room, recurrence, and delivery-mode parsing is tuned for U of T class data.
+
+The App Store review action uses Apple’s native review prompt. iOS decides when the prompt is shown, so tapping the row may not always display a review sheet during testing.
 
 ## Copyright
 

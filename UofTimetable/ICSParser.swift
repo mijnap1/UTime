@@ -288,10 +288,14 @@ enum ICSParser {
 
         let searchableText = "\(title) \(location)".lowercased()
         let deliveryMode: String
-        if searchableText.contains("asynchronous") || searchableText.contains("async") || cleanLocation.isEmpty {
+        if searchableText.contains("asynchronous") || searchableText.contains("async") {
             deliveryMode = "Asynchronous"
+        } else if searchableText.contains("synchronous") || searchableText.contains("sync") {
+            deliveryMode = "Online"
         } else if searchableText.contains("online") || searchableText.contains("remote") {
             deliveryMode = "Online"
+        } else if cleanLocation.isEmpty {
+            deliveryMode = "Asynchronous"
         } else {
             deliveryMode = "In Person"
         }

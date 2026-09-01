@@ -6,11 +6,11 @@
 import ActivityKit
 import SwiftData
 import SwiftUI
-import StoreKit
 import UIKit
 import UniformTypeIdentifiers
 
 private let calendarFileType = UTType(filenameExtension: "ics") ?? .data
+private let appStoreReviewURL = URL(string: "https://apps.apple.com/app/id6801203216?action=write-review")!
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -1875,7 +1875,7 @@ private struct ScheduleListCard: View {
 }
 
 private struct ProfileSummaryCard: View {
-    @Environment(\.requestReview) private var requestReview
+    @Environment(\.openURL) private var openURL
 
     let displayName: String
     let campus: String
@@ -1892,7 +1892,7 @@ private struct ProfileSummaryCard: View {
                     ProfileInfoRow(systemImage: "graduationcap.fill", title: "Program", value: major)
                     ProfileInfoRow(systemImage: "person.text.rectangle.fill", title: "Year", value: year)
                     ProfileInfoRow(systemImage: "calendar", title: "Imported", value: "\(importedCount) class\(importedCount == 1 ? "" : "es")")
-                    ReviewPromptRow(action: { requestReview() })
+                    ReviewPromptRow(action: { openURL(appStoreReviewURL) })
                 }
             }
 

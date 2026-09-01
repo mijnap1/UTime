@@ -47,7 +47,7 @@ Version `1.3` focuses on making the app feel more complete and easier to move th
 - Expanded the **Schedule** page with import steps, upcoming classes, and clearer course metadata.
 - Added support for showing `Async` and `Sync` class types when a room is not available.
 - Improved **Alerts** with Live Activity timing, island controls, and red-alert cue settings.
-- Added a subtle **Rate UTime** action in Profile using Apple’s native App Store review prompt.
+- Added a subtle **Rate UTime** action in Profile that opens the App Store review page.
 - Updated README screenshots to match the current app screens.
 
 ## Screenshots
@@ -152,7 +152,7 @@ For Live Activities, use a device or simulator/runtime that supports ActivityKit
 
 UTime is designed for University of Toronto timetable exports. Other `.ics` calendars may import successfully, but the course, section, room, recurrence, and delivery-mode parsing is tuned for U of T class data.
 
-The App Store review action uses Apple’s native review prompt. iOS decides when the prompt is shown, so tapping the row may not always display a review sheet during testing.
+The App Store review action opens UTime’s App Store review page directly, which makes the Profile review row reliable when someone chooses to use it.
 
 ## Copyright
 

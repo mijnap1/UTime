@@ -7,9 +7,7 @@ import ActivityKit
 import SwiftData
 import SwiftUI
 import UIKit
-import UniformTypeIdentifiers
 
-private let calendarFileType = UTType(filenameExtension: "ics") ?? .data
 private let appStoreReviewURL = URL(string: "https://apps.apple.com/app/id6801203216?action=write-review")!
 
 struct ContentView: View {
@@ -24,7 +22,8 @@ struct ContentView: View {
     @AppStorage("studentMajor") private var studentMajor = ""
     @AppStorage("studentYear") private var studentYear = ""
 
-    @State private var isImportingSchedule = false
+    @State private var isAddingCourse = false
+    @State private var isImportingImage = false
     @State private var isShowingProfileSetup = false
     @State private var toastMessage: String?
     @State private var toastTask: Task<Void, Never>?
@@ -83,12 +82,15 @@ struct ContentView: View {
                             .zIndex(1)
                     }
                 }
-                .fileImporter(
-                    isPresented: $isImportingSchedule,
-                    allowedContentTypes: [calendarFileType],
-                    allowsMultipleSelection: false,
-                    onCompletion: handleFileImport
-                )
+                .sheet(isPresented: $isAddingCourse) {
+                    ManualCourseView(save: addCourse)
+                }
+                .sheet(isPresented: $isImportingImage) {
+                    TimetableImageImportView { drafts in
+                        try addCourse(drafts)
+                        isImportingImage = false
+                    }
+                }
             }
         }
         .onAppear {
@@ -128,7 +130,7 @@ struct ContentView: View {
             if let nextEvent = upcomingEvents.first {
                 NextClassCard(event: nextEvent)
             } else {
-                EmptyNextClassCard(importAction: { isImportingSchedule = true })
+                EmptyNextClassCard(importAction: { isAddingCourse = true })
             }
 
             DaySnapshotCard(
@@ -138,9 +140,9 @@ struct ContentView: View {
                 isPaused: isLiveActivityPaused
             )
         case .schedule:
-            ImportScheduleCard(
-                importedCount: courseEvents.count,
-                importAction: { isImportingSchedule = true }
+            AddScheduleCard(
+                importAction: { isAddingCourse = true },
+                imageAction: { isImportingImage = true }
             )
 
             ScheduleListCard(
@@ -175,39 +177,8 @@ struct ContentView: View {
         }
     }
 
-    private func handleFileImport(_ result: Result<[URL], Error>) {
-        do {
-            guard let url = try result.get().first else { return }
-            let didAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if didAccess {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-
-            let calendarText = try String(contentsOf: url, encoding: .utf8)
-            let drafts = ICSParser.parse(calendarText)
-            replaceSchedule(with: drafts)
-            let snapshots = drafts.map(CourseReminderSnapshot.init)
-
-            restartIslandScheduler(with: snapshots)
-            syncSchedule(with: snapshots)
-
-            showToast(
-                drafts.isEmpty
-                    ? "No classes were found in that calendar."
-                    : "Imported \(drafts.count) classes from \(url.lastPathComponent)."
-            )
-        } catch {
-            showToast("Could not import calendar: \(error.localizedDescription)")
-        }
-    }
-
-    private func replaceSchedule(with drafts: [CourseEventDraft]) {
-        for event in courseEvents {
-            modelContext.delete(event)
-        }
-
+    private func addCourse(_ drafts: [CourseEventDraft]) throws {
+        let existingSnapshots = courseEvents.map(snapshot(from:))
         for draft in drafts {
             modelContext.insert(
                 CourseEvent(
@@ -226,7 +197,17 @@ struct ContentView: View {
             )
         }
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+        let snapshots = existingSnapshots + drafts.map(CourseReminderSnapshot.init)
+        restartIslandScheduler(with: snapshots)
+        syncSchedule(with: snapshots)
+        selectedHomeSection = .schedule
+        showToast("Added \(drafts.count) classes to your schedule.")
     }
 
     private func clearSchedule() {
@@ -464,7 +445,7 @@ struct ContentView: View {
 
     private func startPrimaryFlow() {
         if hasCompletedProfileSetup {
-            isImportingSchedule = true
+            isAddingCourse = true
         } else {
             isShowingProfileSetup = true
         }
@@ -634,7 +615,7 @@ private struct AppHeaderView: View {
                 .foregroundColor(AppTheme.secondaryText)
         }
 
-        return Text("Import your timetable once. UTime keeps your classes ready and brings the next room to your Lock Screen.")
+        return Text("Add your timetable once. UTime keeps your classes ready and brings the next room to your Lock Screen.")
             .font(OnboardingFont.regular(14))
             .foregroundColor(AppTheme.secondaryText)
     }
@@ -724,7 +705,7 @@ private struct WelcomeOnboardingView: View {
             Spacer(minLength: 48)
 
             VStack(alignment: .leading, spacing: 14) {
-                WelcomeFeatureRow(systemImage: "calendar", title: "Import once", detail: "Choose your .ics timetable file.")
+                WelcomeFeatureRow(systemImage: "calendar", title: "Add your courses", detail: "Enter your weekly meetings and rooms.")
                 WelcomeFeatureRow(systemImage: "location.fill", title: "Find the room", detail: "Course and room show on the Lock Screen.")
                 WelcomeFeatureRow(systemImage: "timer", title: "Arrive on time", detail: "Live cues appear before class.")
             }
@@ -1030,7 +1011,7 @@ private struct ProfileSetupView: View {
         case 0: return "This stays on your iPhone and is only used to personalize the app."
         case 1: return "Campus helps UTime feel built around your day."
         case 2: return "Optional context for your local profile."
-        default: return "Last one. You can import your timetable from the home screen."
+        default: return "Last one. You can add your timetable from the home screen."
         }
     }
 
@@ -1432,7 +1413,7 @@ private struct EmptyNextClassCard: View {
                         .background(AppTheme.blue.opacity(0.10), in: Circle())
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Import your timetable")
+                        Text("Add your timetable")
                             .font(OnboardingFont.semibold(15))
                             .foregroundStyle(AppTheme.primaryText)
 
@@ -1445,7 +1426,7 @@ private struct EmptyNextClassCard: View {
                 }
 
                 PrimaryActionButton(
-                    title: "Import .ics File",
+                    title: "Add a course",
                     systemImage: "square.and.arrow.down",
                     action: importAction
                 )
@@ -1512,27 +1493,18 @@ private struct SnapshotMetricPill: View {
     }
 }
 
-private struct ImportScheduleCard: View {
-    let importedCount: Int
+private struct AddScheduleCard: View {
     let importAction: () -> Void
+    let imageAction: () -> Void
 
     var body: some View {
-        ActionPanel(title: "Import Schedule", subtitle: "Use the .ics file from your timetable") {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(spacing: 0) {
-                    TutorialStep(systemImage: "arrow.down.doc", title: "Download", text: "Export your timetable as an .ics calendar file.")
-                    Divider().padding(.leading, 30)
-                    TutorialStep(systemImage: "folder", title: "Choose file", text: "Import the file into UTime.")
-                    Divider().padding(.leading, 30)
-                    TutorialStep(systemImage: "iphone.gen2", title: "Track next class", text: "Room and timing appear on your phone.")
-                }
-                .padding(.vertical, 2)
-
-                PrimaryActionButton(
-                    title: importedCount == 0 ? "Import .ics File" : "Replace .ics File",
-                    systemImage: "square.and.arrow.down",
-                    action: importAction
-                )
+        ActionPanel(title: "Add your timetable", subtitle: "Build your schedule, one course at a time") {
+            VStack(alignment: .leading, spacing: 14) {
+                TutorialStep(systemImage: "keyboard", title: "Enter manually", text: "Add your courses, weekly meetings, and rooms. Review before saving.")
+                PrimaryActionButton(title: "Add a course", systemImage: "plus", action: importAction)
+                Divider()
+                TutorialStep(systemImage: "photo", title: "Upload a PNG", text: "Scan the table in your ACORN timetable and check the results.")
+                PrimaryActionButton(title: "Upload timetable", systemImage: "photo", action: imageAction)
             }
         }
     }
@@ -1681,7 +1653,7 @@ private struct LiveActivityPauseControl: View {
                         .font(OnboardingFont.semibold(14))
                         .foregroundStyle(AppTheme.primaryText)
 
-                    Text(isPaused ? "Schedule stays imported. Island stays off." : "Next class can appear on the island.")
+                    Text(isPaused ? "Your schedule stays saved. Island stays off." : "Next class can appear on the island.")
                         .font(OnboardingFont.regular(12))
                         .foregroundStyle(AppTheme.secondaryText)
                         .lineLimit(1)
@@ -1780,7 +1752,7 @@ private struct AlertStatusCard: View {
     let isPaused: Bool
 
     var body: some View {
-        ActionPanel(title: "Alert Status", subtitle: isPaused ? "Paused until you resume it" : "Ready for your imported classes") {
+        ActionPanel(title: "Alert Status", subtitle: isPaused ? "Paused until you resume it" : "Ready for your saved classes") {
             VStack(spacing: 10) {
                 StatusRow(
                     systemImage: isPaused ? "pause.circle.fill" : "checkmark.circle.fill",
@@ -1865,12 +1837,12 @@ private struct ScheduleListCard: View {
             Button("Cancel", role: .cancel) {}
             Button("Clear Schedule", role: .destructive, action: clearAction)
         } message: {
-            Text("This deletes every imported class from UTime on this device.")
+            Text("This deletes every saved class from UTime on this device.")
         }
     }
 
     private var subtitle: String {
-        events.isEmpty ? "Imported classes will appear here" : "\(events.count) future classes imported"
+        events.isEmpty ? "Your classes will appear here" : "\(events.count) upcoming classes"
     }
 }
 
@@ -1891,7 +1863,7 @@ private struct ProfileSummaryCard: View {
                     ProfileInfoRow(systemImage: "building.columns.fill", title: "Campus", value: campus)
                     ProfileInfoRow(systemImage: "graduationcap.fill", title: "Program", value: major)
                     ProfileInfoRow(systemImage: "person.text.rectangle.fill", title: "Year", value: year)
-                    ProfileInfoRow(systemImage: "calendar", title: "Imported", value: "\(importedCount) class\(importedCount == 1 ? "" : "es")")
+                    ProfileInfoRow(systemImage: "calendar", title: "Scheduled", value: "\(importedCount) class\(importedCount == 1 ? "" : "es")")
                     ReviewPromptRow(action: { openURL(appStoreReviewURL) })
                 }
             }
@@ -2147,7 +2119,7 @@ private struct EmptyScheduleView: View {
                 .font(.system(size: 17, weight: .medium, design: .default))
                 .foregroundStyle(AppTheme.blue)
 
-            Text("No classes imported yet")
+            Text("No classes added yet")
                 .font(OnboardingFont.regular(14))
                 .foregroundStyle(AppTheme.secondaryText)
 

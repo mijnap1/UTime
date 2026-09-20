@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  Import your <code>.ics</code> timetable once, then use <strong>Today</strong>, <strong>Schedule</strong>, <strong>Alerts</strong>, and <strong>Profile</strong> to keep your next class, room, delivery mode, and Live Activity timing close at hand.
+  Enter your weekly timetable once, then use <strong>Today</strong>, <strong>Schedule</strong>, <strong>Alerts</strong>, and <strong>Profile</strong> to keep your next class, room, delivery mode, and Live Activity timing close at hand.
 </p>
 
 <p align="center">
@@ -27,14 +27,14 @@
 
 ## Overview
 
-UTime turns a static U of T calendar export into a practical class companion for iPhone. Instead of checking a full calendar every time you need a room, UTime focuses on the question students usually care about most:
+UTime turns a weekly U of T timetable into a practical class companion for iPhone. Instead of checking a full calendar every time you need a room, UTime focuses on the question students usually care about most:
 
 **What is my next class, when does it start, and where do I need to go?**
 
 The app is organized around a bottom navigation bar with four focused sections:
 
 - **Today** shows the next class, the room, and a compact overview of the day.
-- **Schedule** handles `.ics` import, replacement, clearing, and upcoming class management.
+- **Schedule** handles manual course entry, clearing, and upcoming class management.
 - **Alerts** controls when Live Activities appear and when urgent cues should start.
 - **Profile** keeps local student context and app actions in one quiet place.
 
@@ -67,7 +67,7 @@ The **Today** section is the main landing view. It highlights the next class wit
 
 ### Schedule
 
-The **Schedule** section is where timetable data is imported and managed. UTime accepts an `.ics` file exported from a timetable, expands recurring classes, and displays future classes in a clean list. Imported schedules can be replaced or cleared without creating an account.
+The **Schedule** section lets you add courses manually, with term dates and weekly lecture, tutorial, lab, or seminar meetings. Review generated class dates and swipe to exclude holidays before saving. New courses are appended to the existing schedule. Use **Upload timetable** to scan an ACORN PNG from Files or Photos. Recognition runs on-device, and all extracted courses can be edited before saving.
 
 ### Alerts
 
@@ -88,18 +88,11 @@ UTime uses native iOS Live Activities to keep the next class visible when it mat
 
 The goal is not to mirror the whole schedule on the Lock Screen. UTime only surfaces the immediate next class, which keeps the experience focused and glanceable.
 
-## Calendar Import
+## Timetable Entry
 
-The importer is tuned for U of T timetable exports and supports the calendar details those files commonly rely on:
+Manual entry uses Toronto time and expands weekly meetings across the selected term, preserving local class times across daylight-saving changes. Set in-person locations or mark a meeting as online. Review class dates before saving; holidays and reading week are not excluded automatically. Saved occurrences can be deleted individually from Schedule.
 
-- `DTSTART` / `DTEND`
-- weekly `RRULE` expansion
-- `COUNT`, `UNTIL`, `INTERVAL`, and `BYDAY`
-- `EXDATE` skipped classes
-- `RDATE` extra or makeup classes
-- in-person, async, and sync/online metadata detection
-
-When a class has a physical room, UTime shows the room. When a class has no room but includes online delivery metadata, UTime can show `Async` or `Sync` instead, keeping the schedule readable without blank trailing details.
+ICS import has been removed. Existing saved schedules remain available. PNG import reads the full Course / Day / Time / Location table beneath the grid. Grid-only screenshots are not supported. The review includes the original image and requires confirmation of meetings and exact term dates. AM/PM is inferred (1–7 default to afternoon), so check times before saving. The image does not provide holidays or the winter schedule of a year-long course.
 
 ## Privacy and Data
 
@@ -140,17 +133,26 @@ privacy/               Privacy policy page
 
 For Live Activities, use a device or simulator/runtime that supports ActivityKit.
 
-## Import a Timetable in the App
+## Add a Timetable in the App
 
-1. Export your timetable as an `.ics` calendar file.
-2. Open UTime and choose **Schedule**.
-3. Import or replace the `.ics` file.
-4. Open **Alerts** to set how early Live Activities and red cues should appear.
-5. Let UTime surface the next class before it starts.
+1. Open **Schedule** and tap **Add a course**.
+2. Enter the course, term dates, and weekly meetings. Alternatively, choose **Upload timetable**, select an image, and check the scanned courses.
+3. Tap **Review course**, remove any excluded dates, then **Save**.
+4. Repeat for the next course; term dates are remembered.
+5. Open **Alerts** to set Live Activity timing.
+
+## Checks
+
+```sh
+swiftc UofTimetable/CourseReminderSnapshot.swift UofTimetable/ManualCourse.swift tests/ManualCourseChecks.swift -o /tmp/manual-course-checks
+/tmp/manual-course-checks
+swiftc UofTimetable/CourseReminderSnapshot.swift UofTimetable/ManualCourse.swift UofTimetable/TimetableImageParser.swift tests/TimetableImageChecks.swift -o /tmp/timetable-image-checks
+/tmp/timetable-image-checks
+```
+
+The image checks also accept the original sample PNG path as an argument to validate actual Vision output against the expected four courses and nine weekly meetings.
 
 ## Notes
-
-UTime is designed for University of Toronto timetable exports. Other `.ics` calendars may import successfully, but the course, section, room, recurrence, and delivery-mode parsing is tuned for U of T class data.
 
 The App Store review action opens UTime’s App Store review page directly, which makes the Profile review row reliable when someone chooses to use it.
 

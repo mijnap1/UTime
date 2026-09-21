@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct TimetableImageImportView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var scanID = UUID()
+    @State private var isLoadingPhoto = false
     @State private var photo: PhotosPickerItem?
     @State private var imageData: Data?
     @State private var courses: [ManualCourse] = []
@@ -29,10 +31,13 @@ struct TimetableImageImportView: View {
                         Label("Choose PNG from Files", systemImage: "folder")
                     }
                 }
-                .disabled(isScanning)
+                .disabled(isScanning || isLoadingPhoto)
                 if let errorMessage {
                     Section("Couldn't read timetable") {
                         Text(errorMessage).foregroundStyle(.red)
+                        if imageData != nil {
+                            Button("Retry reading this image") { beginScan() }
+                        }
                         Text("Choose a clearer image with the full table, or close this screen and use manual entry.")
                     }
                 }
@@ -45,7 +50,9 @@ struct TimetableImageImportView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 10) {
-                    if isScanning {
+                    if isLoadingPhoto {
+                        ProgressView("Loading photo…")
+                    } else if isScanning {
                         ProgressView("Reading timetable…")
                     } else if !courses.isEmpty {
                         Text("\(courses.count) courses · \(courses.reduce(0) { $0 + $1.meetings.count }) weekly meetings")
@@ -57,7 +64,7 @@ struct TimetableImageImportView: View {
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isScanning || courses.isEmpty)
+                    .disabled(isScanning || isLoadingPhoto || courses.isEmpty)
                     if imageData == nil {
                         Text("Choose your timetable image to continue.")
                             .font(.footnote).foregroundStyle(.secondary)
@@ -80,6 +87,7 @@ struct TimetableImageImportView: View {
                         throw ManualCourse.ValidationError("Choose an image smaller than 20 MB.")
                     }
                     imageData = try Data(contentsOf: url)
+                    beginScan()
                 } catch {
                     if (error as NSError).code != NSUserCancelledError {
                         courses = []
@@ -92,6 +100,10 @@ struct TimetableImageImportView: View {
             }
             .task(id: photo) {
                 guard let photo else { return }
+                isLoadingPhoto = true
+                courses = []
+                errorMessage = nil
+                defer { isLoadingPhoto = false }
                 do {
                     guard let data = try await photo.loadTransferable(type: Data.self) else {
                         throw ManualCourse.ValidationError("Couldn't load this photo. Try choosing the PNG from Files.")
@@ -101,12 +113,13 @@ struct TimetableImageImportView: View {
                     }
                     try Task.checkCancellation()
                     imageData = data
+                    beginScan()
                 } catch is CancellationError {} catch {
                     courses = []
                     errorMessage = error.localizedDescription
                 }
             }
-            .task(id: imageData) {
+            .task(id: scanID) {
                 guard let imageData else { return }
                 courses = []
                 errorMessage = nil
@@ -119,10 +132,18 @@ struct TimetableImageImportView: View {
                     courses = result
                     isScanning = false
                 } catch is CancellationError {} catch {
+                    guard !Task.isCancelled else { return }
                     errorMessage = error.localizedDescription
                     isScanning = false
                 }
             }
         }
     }
+    private func beginScan() {
+        courses = []
+        errorMessage = nil
+        isScanning = true
+        scanID = UUID()
+    }
+
 }

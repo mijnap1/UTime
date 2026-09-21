@@ -44,6 +44,30 @@ struct TimetableImageChecks {
         assert(phoneCourses.count == 1 && phoneCourses[0].meetings.count == 1)
         assert(phoneCourses[0].meetings[0].startMinute == 540 && phoneCourses[0].meetings[0].endMinute == 660)
         assert(phoneCourses[0].meetings[0].room == "103")
+        let spaced = try TimetableImageParser.timeRange("９ : ００ − １１ : ００")
+        assert(spaced.0 == 540 && spaced.1 == 660)
+        let names = try TimetableImageParser.weekdays("Monday / Wednesday")
+        assert(names == [2, 4])
+        let abbreviations = try TimetableImageParser.weekdays("Tue, Thu")
+        assert(abbreviations == [3, 5])
+        rejects { _ = try TimetableImageParser.weekdays("M M") }
+        rejects { _ = try TimetableImageParser.timeRange("٩:٠٠ - ١١:٠٠") }
+        rejects { _ = try TimetableImageParser.timeRange("25:00 - 26:00") }
+        rejects { _ = try TimetableImageParser.timeRange("11:00 - 10:00") }
+        rejects { _ = try TimetableImageParser.scan(Data("not an image".utf8)) }
+        // A row with day/time/location but no recognized course cannot be omitted.
+        let orphan = phoneRow.dropFirst().map {
+            TimetableImageParser.Cell(text: $0.text, bounds: $0.bounds.offsetBy(dx: 0, dy: -0.05))
+        }
+        rejects { _ = try TimetableImageParser.parse(headers + phoneRow + orphan) }
+        let splitCourse = [
+            TimetableImageParser.Cell(text: "CSC148H1", bounds: CGRect(x: 0, y: 0.45, width: 0.13, height: 0.02)),
+            .init(text: "F LEC", bounds: CGRect(x: 0.15, y: 0.45, width: 0.05, height: 0.02))
+        ]
+        let paddedHeaders = headers.map { TimetableImageParser.Cell(text: " \($0.text): ", bounds: $0.bounds) }
+        let split = try TimetableImageParser.parse(paddedHeaders + splitCourse + Array(phoneRow.dropFirst()))
+        assert(split.count == 1 && split[0].code == "CSC148H1" && split[0].meetings.count == 1)
+        assert(split[0].meetings[0].endMinute == 660)
         if let path = CommandLine.arguments.dropFirst().first {
             let courses = try TimetableImageParser.scan(Data(contentsOf: URL(fileURLWithPath: path)))
             assert(courses.map(\.code) == ["AFR280Y1", "CSC148H1", "ESS205H1", "MAT135H1"])

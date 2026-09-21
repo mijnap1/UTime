@@ -32,7 +32,7 @@ nonisolated enum TimetableImageParser {
     }
 
     static func parse(_ cells: [Cell]) throws -> [ManualCourse] {
-        guard let courseHeader = cells.first(where: { $0.text.lowercased() == "course" }),
+        guard let courseHeader = cells.first(where: { normalizedHeader($0.text) == "course" }),
               let dayHeader = header("day", near: courseHeader, cells: cells),
               let timeHeader = header("time", near: courseHeader, cells: cells),
               let locationHeader = header("location", near: courseHeader, cells: cells),
@@ -42,8 +42,19 @@ nonisolated enum TimetableImageParser {
             throw ManualCourse.ValidationError("Include the full Course, Day, Time, and Location table below the timetable. A grid-only screenshot isn't supported yet.")
         }
         let columns = [dayHeader, timeHeader, locationHeader].map { $0.bounds.minX - 0.025 }
-        let rows = cells.filter { $0.bounds.midY < courseHeader.bounds.minY && $0.bounds.minX < columns[0] }
-            .sorted { $0.bounds.midY > $1.bounds.midY }
+        let body = cells.filter { $0.bounds.midY < courseHeader.bounds.minY }
+        var rows: [Cell] = []
+        for cell in body.filter({ $0.bounds.minX < columns[0] }).sorted(by: { $0.bounds.midY > $1.bounds.midY }) {
+            if !rows.contains(where: { abs($0.bounds.midY - cell.bounds.midY) < max($0.bounds.height * 0.65, 0.004) }) {
+                rows.append(cell)
+            }
+        }
+        // Missing course text must not silently drop an otherwise visible meeting row.
+        guard body.filter({ $0.bounds.minX >= columns[0] }).allSatisfy({ cell in
+            rows.contains { abs($0.bounds.midY - cell.bounds.midY) < max($0.bounds.height * 0.65, 0.004) }
+        }) else {
+            throw ManualCourse.ValidationError("Some table rows couldn't be matched to a course. Include a clear, complete table or enter the schedule manually.")
+        }
         guard !rows.isEmpty else { throw ManualCourse.ValidationError("No course rows were found. Try a clearer, uncropped PNG.") }
         var courses: [ManualCourse] = []
         for row in rows {
@@ -53,8 +64,10 @@ nonisolated enum TimetableImageParser {
                 neighbors.filter { $0.bounds.minX >= columns[index] && (index == 2 || $0.bounds.minX < columns[index + 1]) }
                     .sorted { $0.bounds.minX < $1.bounds.minX }.map(\.text).joined(separator: " ")
             }
-            let text = row.text.uppercased()
-            guard let codeRange = text.range(of: #"^[A-Z]{3}\d{3}[HY]\d"#, options: .regularExpression),
+            let text = neighbors.filter { $0.bounds.minX < columns[0] }
+                .sorted { $0.bounds.minX < $1.bounds.minX }.map(\.text).joined(separator: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard let codeRange = text.range(of: #"^[A-Z]{3}[0-9]{3}[HY][0-9]"#, options: .regularExpression),
                   let typeRange = text.range(of: #"(LEC|TUT|PRA|LAB|SEM)\s*$"#, options: .regularExpression) else {
                 throw ManualCourse.ValidationError("Couldn't read the course row ‘\(row.text)’. Try a clearer image or enter it manually.")
             }
@@ -80,18 +93,23 @@ nonisolated enum TimetableImageParser {
         return courses
     }
 
+    private static func normalizedHeader(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)).lowercased()
+    }
+
     private static func header(_ text: String, near row: Cell, cells: [Cell]) -> Cell? {
-        cells.first { $0.text.lowercased() == text && abs($0.bounds.midY - row.bounds.midY) < row.bounds.height }
+        cells.first { normalizedHeader($0.text) == text && abs($0.bounds.midY - row.bounds.midY) < row.bounds.height }
     }
 
     static func weekdays(_ text: String) throws -> [Int] {
-        var remaining = text.lowercased().filter { !$0.isWhitespace && $0 != "," }
+        var remaining = text.lowercased().filter { !$0.isWhitespace && $0 != "," && $0 != "/" }
         var days: [Int] = []
-        let names = [("th", 5), ("tu", 3), ("sa", 7), ("su", 1), ("m", 2), ("w", 4), ("f", 6)]
+        let names = [("monday", 2), ("tuesday", 3), ("wednesday", 4), ("thursday", 5), ("friday", 6), ("saturday", 7), ("sunday", 1), ("mon", 2), ("tue", 3), ("wed", 4), ("thu", 5), ("fri", 6), ("sat", 7), ("sun", 1), ("th", 5), ("tu", 3), ("sa", 7), ("su", 1), ("m", 2), ("w", 4), ("f", 6)]
         while !remaining.isEmpty {
             guard let match = names.first(where: { remaining.hasPrefix($0.0) }) else {
                 throw ManualCourse.ValidationError("Couldn't read day ‘\(text)’. Try a clearer image.")
             }
+            guard !days.contains(match.1) else { throw ManualCourse.ValidationError("Repeated day ‘\(text)’. Check the timetable image.") }
             days.append(match.1)
             remaining.removeFirst(match.0.count)
         }
@@ -102,10 +120,11 @@ nonisolated enum TimetableImageParser {
     static func timeRange(_ text: String) throws -> (Int, Int) {
         // Vision on iPhone can append a border/footnote glyph (for example 11:00t).
         // Allow only trailing marks and one lookalike glyph; keep all digits and AM/PM intact.
-        let pattern = #"^\s*(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})[\s!|†‡'’‘".]*[tIlł]?[\s!|†‡'’‘".]*$"#
+        let normalized = text.precomposedStringWithCompatibilityMapping
+        let pattern = #"^\s*([0-9]{1,2})\s*:\s*([0-9]{2})\s*[-–—−]\s*([0-9]{1,2})\s*:\s*([0-9]{2})[\s!|†‡'’‘".]*[tIlł]?[\s!|†‡'’‘".]*$"#
         let regex = try NSRegularExpression(pattern: pattern)
-        let value = text as NSString
-        guard let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: value.length)) else {
+        let value = normalized as NSString
+        guard let match = regex.firstMatch(in: normalized, range: NSRange(location: 0, length: value.length)) else {
             throw ManualCourse.ValidationError("Couldn't read time ‘\(text)’. Try a clearer image.")
         }
         let numbers = (1...4).map { Int(value.substring(with: match.range(at: $0)))! }

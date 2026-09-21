@@ -11,6 +11,10 @@ struct TimetableImageChecks {
         assert(afternoon.0 == 780 && afternoon.1 == 900)
         let noon = try TimetableImageParser.timeRange("11:00 – 1:00")
         assert(noon.0 == 660 && noon.1 == 780)
+        for text in ["9:00 - 11:00t", "9:00 - 11:00†", "9:00 - 11:00ł", "9:00 - 11:00!", "9:00 - 11:00|", "9:00 - 11:00t’."] {
+            let range = try TimetableImageParser.timeRange(text)
+            assert(range.0 == 540 && range.1 == 660, "Phone OCR trailing marks: \(text)")
+        }
         func rejects(_ work: () throws -> Void) {
             do { try work(); fatalError("Invalid scan was accepted") }
             catch is ManualCourse.ValidationError {} catch { fatalError("Unexpected error: \(error)") }
@@ -20,6 +24,9 @@ struct TimetableImageChecks {
         rejects { _ = try TimetableImageParser.timeRange("9:80 - 11:00") }
         rejects { _ = try TimetableImageParser.timeRange("9:00 - 9:00") }
         rejects { _ = try TimetableImageParser.timeRange("unreadable") }
+        for text in ["9:00 - 11:001", "9:00 - 11:00 12:00", "9:00 - 11:00 PM", "9:00 - 11:00 Tuesday", "9:80 - 11:00t"] {
+            rejects { _ = try TimetableImageParser.timeRange(text) }
+        }
         // A partial row must fail rather than silently importing an incomplete schedule.
         let headers = ["Course", "Day", "Time", "Location"].enumerated().map { index, text in
             TimetableImageParser.Cell(text: text, bounds: CGRect(x: Double(index) * 0.24, y: 0.5, width: 0.1, height: 0.02))
@@ -27,6 +34,16 @@ struct TimetableImageChecks {
         rejects {
             _ = try TimetableImageParser.parse(headers + [.init(text: "CSC148H1 F LEC", bounds: CGRect(x: 0, y: 0.45, width: 0.2, height: 0.02))])
         }
+        let phoneRow = [
+            TimetableImageParser.Cell(text: "CSC148H1 F LEC", bounds: CGRect(x: 0, y: 0.45, width: 0.2, height: 0.02)),
+            .init(text: "W", bounds: CGRect(x: 0.24, y: 0.45, width: 0.1, height: 0.02)),
+            .init(text: "9:00 - 11:00t", bounds: CGRect(x: 0.48, y: 0.45, width: 0.2, height: 0.02)),
+            .init(text: "MP 103", bounds: CGRect(x: 0.72, y: 0.45, width: 0.1, height: 0.02))
+        ]
+        let phoneCourses = try TimetableImageParser.parse(headers + phoneRow)
+        assert(phoneCourses.count == 1 && phoneCourses[0].meetings.count == 1)
+        assert(phoneCourses[0].meetings[0].startMinute == 540 && phoneCourses[0].meetings[0].endMinute == 660)
+        assert(phoneCourses[0].meetings[0].room == "103")
         if let path = CommandLine.arguments.dropFirst().first {
             let courses = try TimetableImageParser.scan(Data(contentsOf: URL(fileURLWithPath: path)))
             assert(courses.map(\.code) == ["AFR280Y1", "CSC148H1", "ESS205H1", "MAT135H1"])

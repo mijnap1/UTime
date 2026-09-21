@@ -100,7 +100,9 @@ nonisolated enum TimetableImageParser {
     }
 
     static func timeRange(_ text: String) throws -> (Int, Int) {
-        let pattern = #"^\s*(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})\s*$"#
+        // Vision on iPhone can append a border/footnote glyph (for example 11:00t).
+        // Allow only trailing marks and one lookalike glyph; keep all digits and AM/PM intact.
+        let pattern = #"^\s*(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})[\s!|†‡'’‘".]*[tIlł]?[\s!|†‡'’‘".]*$"#
         let regex = try NSRegularExpression(pattern: pattern)
         let value = text as NSString
         guard let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: value.length)) else {

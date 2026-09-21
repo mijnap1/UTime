@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  Enter your weekly timetable once, then use <strong>Today</strong>, <strong>Schedule</strong>, <strong>Alerts</strong>, and <strong>Profile</strong> to keep your next class, room, delivery mode, and Live Activity timing close at hand.
+  Upload your ACORN timetable image or enter your courses manually, then use <strong>Today</strong>, <strong>Schedule</strong>, <strong>Alerts</strong>, and <strong>Profile</strong> to keep your next class, room, delivery mode, and Live Activity timing close at hand.
 </p>
 
 <p align="center">
@@ -34,23 +34,24 @@ UTime turns a weekly U of T timetable into a practical class companion for iPhon
 The app is organized around a bottom navigation bar with four focused sections:
 
 - **Today** shows the next class, the room, and a compact overview of the day.
-- **Schedule** handles manual course entry, clearing, and upcoming class management.
+- **Schedule** handles PNG import, manual course entry, clearing, and upcoming class management.
 - **Alerts** controls when Live Activities appear and when urgent cues should start.
 - **Profile** keeps local student context and app actions in one quiet place.
 
-## v1.3 Highlights
+## v2.1 Highlights
 
-Version `1.3` focuses on making the app feel more complete and easier to move through:
+Version `2.1` makes it easier to add a timetable with two options: upload an ACORN PNG or enter courses manually.
 
-- Added a persistent bottom navigation bar for clearer app sections.
-- Refined the **Today** page with a focused next-class card and a cleaner overview panel.
-- Expanded the **Schedule** page with import steps, upcoming classes, and clearer course metadata.
-- Added support for showing `Async` and `Sync` class types when a room is not available.
-- Improved **Alerts** with Live Activity timing, island controls, and red-alert cue settings.
-- Added a subtle **Rate UTime** action in Profile that opens the App Store review page.
-- Updated README screenshots to match the current app screens.
+- **PNG import:** Choose an image from Photos or a PNG from Files. On-device text recognition reads course codes, meeting days, times, and locations from the table below the timetable grid.
+- **Manual entry:** Add courses with term dates and multiple weekly lectures, tutorials, labs, or seminars, including rooms and online meetings.
+- **Review before saving:** Compare scanned details with the original image, correct meetings, confirm term dates, and remove holidays or cancelled classes from the generated dates.
+- **Visible import actions:** **Review & import**, **Review dates**, and the final **Import schedule** button stay at the bottom of their screens.
+- **Preserve your schedule:** New courses are added alongside existing classes. ICS import has been removed; previously saved schedules remain available.
+- **Consistent class times:** Weekly meetings use Toronto time and retain their local start times across daylight-saving changes.
 
 ## Screenshots
+
+The images below and above show earlier app screens; the v2.1 timetable-entry screens are not pictured yet.
 
 <p align="center">
   <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">
@@ -75,7 +76,7 @@ The **Alerts** section controls how early UTime starts Live Activity updates bef
 
 ### Profile
 
-The **Profile** section stores local student details such as campus, program, year, and imported class count. It also includes a small **Rate UTime** row for users who want to leave an App Store review, without turning the page into a promotion screen.
+The **Profile** section stores local student details such as campus, program, year, and scheduled class count. It also includes a small **Rate UTime** row for users who want to leave an App Store review, without turning the page into a promotion screen.
 
 ## Live Activities
 
@@ -99,6 +100,7 @@ ICS import has been removed. Existing saved schedules remain available. PNG impo
 UTime is built around local timetable use:
 
 - Student profile details stay on device.
+- Timetable image recognition runs on-device; the image is not uploaded for OCR.
 - Imported class data is used to power the app’s schedule and Live Activity views.
 - No account is required to import or view a timetable.
 - Live Activity support uses only the data needed to show class updates.
@@ -110,6 +112,7 @@ Read the full privacy policy at [jamieryu.com/UTime/privacy](https://jamieryu.co
 - Swift
 - SwiftUI
 - SwiftData
+- Vision / PhotosUI for timetable image import
 - ActivityKit / WidgetKit
 - Supabase Edge Functions for backend Live Activity support
 - iOS 17.6+
@@ -135,11 +138,23 @@ For Live Activities, use a device or simulator/runtime that supports ActivityKit
 
 ## Add a Timetable in the App
 
+### Upload an ACORN PNG
+
+1. Open **Schedule** and tap **Upload timetable**.
+2. Choose **Choose from Photos** or **Choose PNG from Files**. Include the full Course / Day / Time / Location table below the grid; images must be 20 MB or smaller.
+3. After recognition finishes, tap **Review & import** at the bottom.
+4. Compare the extracted courses with the original PNG, correct any details, and set the exact term dates. Check AM/PM, since the export omits it.
+5. Turn on **I checked all meetings and term dates**, then tap **Review dates**.
+6. Swipe left on dates to exclude holidays, reading week, or cancelled classes, then tap **Import schedule**.
+
+### Enter courses manually
+
 1. Open **Schedule** and tap **Add a course**.
-2. Enter the course, term dates, and weekly meetings. Alternatively, choose **Upload timetable**, select an image, and check the scanned courses.
-3. Tap **Review course**, remove any excluded dates, then **Save**.
+2. Enter the course, term dates, and weekly meetings. Use **Add another meeting** for additional days, tutorials, or labs.
+3. Tap **Review dates**, remove any excluded dates, then tap **Save course**.
 4. Repeat for the next course; term dates are remembered.
-5. Open **Alerts** to set Live Activity timing.
+
+Open **Alerts** to set Live Activity timing after saving your timetable.
 
 ## Checks
 

@@ -38,9 +38,9 @@ The app is organized around a bottom navigation bar with four focused sections:
 - **Alerts** controls when Live Activities appear and when urgent cues should start.
 - **Profile** keeps local student context and app actions in one quiet place.
 
-## v2.2 Highlights
+## v2.3 Highlights
 
-Version `2.2` improves timetable image recognition and makes the upload flow easier to complete.
+Version `2.3` improves timetable image recognition and makes the upload flow easier to complete.
 
 - **Better screenshot recognition:** Rescans the course table separately from Safari controls and retries missing day labels in a focused crop.
 - **Multiple meetings per course:** Preserves separate lectures and tutorials, including rows that list more than one day. Missing days can be recovered from an unambiguous grid match after checking the other meetings for that course.
@@ -53,7 +53,7 @@ PNG import and manual entry remain available. New classes are added alongside ex
 
 ## Screenshots
 
-The images below and above show earlier app screens; the v2.2 timetable-entry screens are not pictured yet.
+The images below and above show earlier app screens; the v2.3 timetable-entry screens are not pictured yet.
 
 <p align="center">
   <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">

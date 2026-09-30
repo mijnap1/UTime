@@ -25,6 +25,21 @@ final class PushToStartTokenManager {
         startActivityUpdatesListener()
     }
 
+    func retryRegistrations() async {
+        startListening()
+        if let data = Activity<ClassActivityAttributes>.pushToStartToken {
+            await LiveActivityPushRegistrationClient.shared.registerPushToStartToken(data.map { String(format: "%02x", $0) }.joined())
+        } else if let cached = UserDefaults.standard.string(forKey: Self.latestTokenDefaultsKey) {
+            await LiveActivityPushRegistrationClient.shared.registerPushToStartToken(cached)
+        }
+        for activity in Activity<ClassActivityAttributes>.activities {
+            if let token = activity.pushToken {
+                await LiveActivityPushRegistrationClient.shared.register(activityID: activity.id,
+                    pushToken: token.map { String(format: "%02x", $0) }.joined(), state: activity.content.state)
+            }
+        }
+    }
+
     private func startPushToStartTokenListener() {
         guard listenerTask == nil else { return }
 
@@ -32,7 +47,6 @@ final class PushToStartTokenManager {
             for await tokenData in Activity<ClassActivityAttributes>.pushToStartTokenUpdates {
                 let token = tokenData.map { String(format: "%02x", $0) }.joined()
                 UserDefaults.standard.set(token, forKey: Self.latestTokenDefaultsKey)
-                print("Push-to-start token updated: \(token)")
 
                 await LiveActivityPushRegistrationClient.shared.registerPushToStartToken(token)
             }

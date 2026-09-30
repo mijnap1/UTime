@@ -69,6 +69,7 @@ Deno.serve(async (request) => {
       checked_activities: updateResult.checked,
       updated: updateResult.updated,
       ended: updateResult.ended,
+      failed: startResult.failed + updateResult.failed,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -77,63 +78,83 @@ Deno.serve(async (request) => {
   }
 });
 
-async function startDueSchedules(config: ReturnType<typeof readConfig>, now: Date) {
+export async function startDueSchedules(config: ReturnType<typeof readConfig>, now: Date) {
   const schedules = await fetchDueScheduleRows(config, now);
   let started = 0;
   let skipped = 0;
+  let failed = 0;
 
   for (const schedule of schedules) {
-    if (schedule.push_stage !== "pending") {
-      skipped += 1;
-      continue;
-    }
+    try {
+      if (schedule.push_stage !== "pending") {
+        skipped += 1;
+        continue;
+      }
 
-    if (await hasBlockingEarlierSchedule(config, schedule, now)) {
-      skipped += 1;
-      continue;
-    }
+      if (await hasBlockingEarlierSchedule(config, schedule, now)) {
+        skipped += 1;
+        continue;
+      }
 
-    const token = await fetchPushToStartToken(config, schedule.install_id);
-    if (!token) {
-      skipped += 1;
-      continue;
-    }
+      const token = await fetchPushToStartToken(config, schedule.install_id);
+      if (!token) {
+        skipped += 1;
+        continue;
+      }
 
-    await sendStartPush(config, schedule, token.push_to_start_token);
-    await markScheduleStage(config, schedule.id, "start_sent");
-    started += 1;
+      await sendStartPush(config, schedule, token.push_to_start_token);
+      await markScheduleStage(config, schedule.id, "start_sent");
+      started += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("Schedule delivery failed", schedule.id, String(error));
+      // Put failing devices behind unattempted schedules on the next batch.
+      const retryURL = new URL(`${config.supabaseUrl}/rest/v1/class_schedules`);
+      retryURL.searchParams.set("id", `eq.${schedule.id}`);
+      await fetch(retryURL, { method: "PATCH", headers: { ...dbHeaders(config), "Content-Type": "application/json" },
+        body: JSON.stringify({ last_push_at: now.toISOString() }) }).catch(console.error);
+    }
   }
 
-  return { checked: schedules.length, started, skipped };
+  return { checked: schedules.length, started, skipped, failed };
 }
 
-async function updateActiveLiveActivities(config: ReturnType<typeof readConfig>, now: Date) {
+export async function updateActiveLiveActivities(config: ReturnType<typeof readConfig>, now: Date) {
   const rows = await fetchActiveRows(config);
   let updated = 0;
   let ended = 0;
+  let failed = 0;
 
   for (const row of rows) {
-    const startTime = new Date(row.start_time);
-    const endTime = new Date(row.end_time);
-    const cueStart = new Date(startTime.getTime() - row.alert_cue_minutes * 60_000);
+    try {
+      const startTime = new Date(row.start_time);
+      const endTime = new Date(row.end_time);
+      const cueStart = new Date(startTime.getTime() - row.alert_cue_minutes * 60_000);
 
-    if (now >= endTime) {
-      await sendLiveActivityPush(config, row, "end");
-      await markLiveActivityStage(config, row.activity_id, "ended");
-      await markMatchingScheduleEnded(config, row);
-      ended += 1;
-      continue;
-    }
+      if (now >= endTime) {
+        await sendLiveActivityPush(config, row, "end");
+        await markLiveActivityStage(config, row.activity_id, "ended");
+        await markMatchingScheduleEnded(config, row);
+        ended += 1;
+        continue;
+      }
 
-    if (now >= cueStart && shouldSendCueUpdate(row, now)) {
-      await sendLiveActivityPush(config, row, "update");
-      await markLiveActivityStage(config, row.activity_id, "cue");
-      await markMatchingScheduleCue(config, row);
-      updated += 1;
+      if (now >= cueStart && shouldSendCueUpdate(row, now)) {
+        await sendLiveActivityPush(config, row, "update");
+        await markLiveActivityStage(config, row.activity_id, "cue");
+        await markMatchingScheduleCue(config, row);
+        updated += 1;
+      }
+    } catch (error) {
+      failed += 1;
+      if (error instanceof APNsError && error.status === 410) {
+        await markLiveActivityStage(config, row.activity_id, "ended").catch(console.error);
+      }
+      console.error("Activity delivery failed", row.activity_id, String(error));
     }
   }
 
-  return { checked: rows.length, updated, ended };
+  return { checked: rows.length, updated, ended, failed };
 }
 
 function readConfig() {
@@ -163,28 +184,12 @@ async function fetchDueScheduleRows(
   config: ReturnType<typeof readConfig>,
   now: Date,
 ): Promise<ClassScheduleRow[]> {
-  const url = new URL(`${config.supabaseUrl}/rest/v1/class_schedules`);
-  url.searchParams.set("select", "*");
-  url.searchParams.set("push_stage", "eq.pending");
-  url.searchParams.set("end_time", `gt.${now.toISOString()}`);
-  url.searchParams.set("order", "start_time.asc");
-  url.searchParams.set("limit", "100");
-
-  const response = await fetch(url, {
-    headers: dbHeaders(config),
+  const response = await fetch(`${config.supabaseUrl}/rest/v1/rpc/due_class_schedules`, {
+    method: "POST", headers: { ...dbHeaders(config), "Content-Type": "application/json" },
+    body: JSON.stringify({ p_now: now.toISOString() }),
   });
-
-  if (!response.ok) {
-    throw new Error(`Could not fetch schedule rows: ${await response.text()}`);
-  }
-
-  const rows: ClassScheduleRow[] = await response.json();
-  return rows.filter((row) => {
-    const startTime = new Date(row.start_time).getTime();
-    const endTime = new Date(row.end_time).getTime();
-    const leadStart = startTime - row.live_activity_lead_minutes * 60_000;
-    return now.getTime() >= leadStart && now.getTime() < endTime;
-  });
+  if (!response.ok) throw new Error(`Could not fetch due schedules: ${response.status}`);
+  return await response.json();
 }
 
 async function hasBlockingEarlierSchedule(
@@ -391,7 +396,7 @@ async function sendStartPush(
     },
   };
 
-  const response = await fetch(`https://${config.apnsHost}/3/device/${pushToStartToken}`, {
+  const response = await sendAPNs(config.apnsHost, pushToStartToken, {
     method: "POST",
     headers: {
       "authorization": `bearer ${jwt}`,
@@ -404,7 +409,7 @@ async function sendStartPush(
   });
 
   if (!response.ok) {
-    throw new Error(`APNs start failed: ${response.status} ${await response.text()}`);
+    throw new APNsError(response.status, await response.text());
   }
 }
 
@@ -428,7 +433,7 @@ async function sendLiveActivityPush(
     },
   };
 
-  const response = await fetch(`https://${config.apnsHost}/3/device/${row.activity_token}`, {
+  const response = await sendAPNs(config.apnsHost, row.activity_token, {
     method: "POST",
     headers: {
       "authorization": `bearer ${jwt}`,
@@ -441,7 +446,7 @@ async function sendLiveActivityPush(
   });
 
   if (!response.ok) {
-    throw new Error(`APNs ${event} failed: ${response.status} ${await response.text()}`);
+    throw new APNsError(response.status, await response.text());
   }
 }
 
@@ -600,4 +605,21 @@ function json(body: unknown, status = 200) {
       "Content-Type": "application/json",
     },
   });
+}
+
+class APNsError extends Error {
+  readonly status: number;
+  constructor(status: number, reason: string) { super(`APNs ${status}: ${reason}`); this.status = status; }
+}
+
+export async function sendAPNs(host: string, token: string, options: RequestInit): Promise<Response> {
+  const response = await fetch(`https://${host}/3/device/${token}`, options);
+  if (response.status === 400) {
+    const result = await response.clone().json().catch(() => ({}));
+    if (result.reason === "BadDeviceToken") {
+      const alternate = host === "api.push.apple.com" ? "api.sandbox.push.apple.com" : "api.push.apple.com";
+      return await fetch(`https://${alternate}/3/device/${token}`, options);
+    }
+  }
+  return response;
 }

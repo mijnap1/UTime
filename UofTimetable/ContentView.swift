@@ -11,6 +11,9 @@ import UIKit
 private let appStoreReviewURL = URL(string: "https://apps.apple.com/app/id6801203216?action=write-review")!
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("backendSyncStatus") private var backendSyncStatus = "Not synced yet"
+    @AppStorage("pushStartSyncStatus") private var pushStartSyncStatus = "Waiting for device registration"
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \CourseEvent.startTime) private var courseEvents: [CourseEvent]
     @AppStorage("reminderLeadMinutes") private var reminderLeadMinutes = 30
@@ -97,6 +100,11 @@ struct ContentView: View {
             clampAlertCueMinutes()
             restartIslandScheduler()
         }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            syncSchedule()
+            await PushToStartTokenManager.shared.retryRegistrations()
+        }
         .onChange(of: reminderLeadMinutes) { _, newValue in
             reminderLeadMinutes = min(max(newValue, 1), 60)
             clampAlertCueMinutes()
@@ -151,6 +159,16 @@ struct ContentView: View {
                 clearAction: clearSchedule
             )
         case .alerts:
+            ActionPanel(title: "Automatic Live Activities", subtitle: backendSyncStatus) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Device registration: \(pushStartSyncStatus)").font(.footnote)
+                    Text("Synced schedules let the server send updates while UTime is closed. Delivery still depends on iOS and network access.").font(.footnote)
+                    Button("Retry connection") {
+                        syncSchedule()
+                        Task { await PushToStartTokenManager.shared.retryRegistrations() }
+                    }
+                }
+            }
             ReminderSettingsCard(
                 leadMinutes: $reminderLeadMinutes,
                 alertCueMinutes: $alertCueMinutes,

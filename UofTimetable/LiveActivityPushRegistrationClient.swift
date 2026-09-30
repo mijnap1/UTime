@@ -6,7 +6,9 @@
 //
 
 import Foundation
+import os
 
+@MainActor
 final class LiveActivityPushRegistrationClient {
     static let shared = LiveActivityPushRegistrationClient()
 
@@ -17,7 +19,29 @@ final class LiveActivityPushRegistrationClient {
     private let installIDKey = "utimeInstallID"
     private let isoFormatter = ISO8601DateFormatter()
 
+    private let logger = Logger(subsystem: "com.jamie.UTime", category: "BackendSync")
+    private var scheduleTask: Task<Void, Never>?
     private init() {}
+
+    private func send(_ request: URLRequest) async throws {
+        var request = request
+        request.timeoutInterval = 15
+        for attempt in 0..<3 {
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+                if (200...299).contains(http.statusCode) { return }
+                let error = NSError(domain: "UTime.Backend", code: http.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: "Server returned HTTP \(http.statusCode)"])
+                if http.statusCode != 429 && http.statusCode < 500 { throw error }
+                if attempt == 2 { throw error }
+            } catch {
+                if Task.isCancelled { throw CancellationError() }
+                if attempt == 2 || (error as NSError).domain == "UTime.Backend" { throw error }
+            }
+            try await Task.sleep(for: .seconds(attempt == 0 ? 2 : 4))
+        }
+    }
 
     func register(
         activityID: String,
@@ -36,13 +60,11 @@ final class LiveActivityPushRegistrationClient {
                 state: state
             ))
 
-            let (_, response) = try await URLSession.shared.data(for: request)
-
-            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                print("Live Activity registration failed with status \(httpResponse.statusCode).")
-            }
+            try await send(request)
+            UserDefaults.standard.set("Connected", forKey: "liveActivityTokenSyncStatus")
         } catch {
-            print("Live Activity registration failed: \(error.localizedDescription)")
+            logger.error("Live Activity registration failed: \(error.localizedDescription)")
+            UserDefaults.standard.set("Connection failed — reopen the app to retry", forKey: "liveActivityTokenSyncStatus")
         }
     }
 
@@ -58,14 +80,11 @@ final class LiveActivityPushRegistrationClient {
                 "push_to_start_token": token
             ])
 
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                let body = String(data: data, encoding: .utf8) ?? "No response body"
-                print("Push-to-start token registration failed with status \(httpResponse.statusCode): \(body)")
-            }
+            try await send(request)
+            UserDefaults.standard.set("Connected", forKey: "pushStartSyncStatus")
         } catch {
-            print("Push-to-start token registration failed: \(error.localizedDescription)")
+            logger.error("Push-to-start registration failed: \(error.localizedDescription)")
+            UserDefaults.standard.set("Connection failed — reopen the app to retry", forKey: "pushStartSyncStatus")
         }
     }
 
@@ -74,6 +93,17 @@ final class LiveActivityPushRegistrationClient {
         liveActivityLeadMinutes: Int,
         alertCueMinutes: Int
     ) async {
+        let previous = scheduleTask
+        let task = Task {
+            await previous?.value
+            await uploadSchedule(events: events, liveActivityLeadMinutes: liveActivityLeadMinutes, alertCueMinutes: alertCueMinutes)
+        }
+        scheduleTask = task
+        await task.value
+    }
+
+    private func uploadSchedule(events: [CourseReminderSnapshot], liveActivityLeadMinutes: Int, alertCueMinutes: Int) async {
+        UserDefaults.standard.set("Syncing schedule…", forKey: "backendSyncStatus")
         do {
             var request = URLRequest(url: scheduleSyncEndpoint)
             request.httpMethod = "POST"
@@ -87,13 +117,11 @@ final class LiveActivityPushRegistrationClient {
                 "events": events.map(schedulePayload(for:))
             ])
 
-            let (_, response) = try await URLSession.shared.data(for: request)
-
-            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                print("Schedule sync failed with status \(httpResponse.statusCode).")
-            }
+            try await send(request)
+            UserDefaults.standard.set("Schedule synced", forKey: "backendSyncStatus")
         } catch {
-            print("Schedule sync failed: \(error.localizedDescription)")
+            logger.error("Schedule sync failed: \(error.localizedDescription)")
+            UserDefaults.standard.set("Sync failed — reopen the app to retry", forKey: "backendSyncStatus")
         }
     }
 

@@ -21,7 +21,7 @@ final class ClassLiveActivityManager {
 
     private init() {}
 
-    private var tokenListenerTask: Task<Void, Never>?
+    private var tokenListenerTasks: [String: Task<Void, Never>] = [:]
 
     private var currentActivity: Activity<ClassActivityAttributes>? {
         Activity<ClassActivityAttributes>.activities.first
@@ -46,6 +46,11 @@ final class ClassLiveActivityManager {
             throw ClassLiveActivityError.liveActivitiesDisabled
         }
 
+        if let existing = currentActivity, existing.content.state.courseCode == courseCode,
+           existing.content.state.startTime == startTime, existing.content.state.endTime == endTime {
+            observePushTokenUpdates(for: existing)
+            return existing
+        }
         await end(dismissalPolicy: .immediate)
 
         let attributes = ClassActivityAttributes(
@@ -130,10 +135,8 @@ final class ClassLiveActivityManager {
     }
 
     func end(dismissalPolicy: ActivityUIDismissalPolicy = .default) async {
-        tokenListenerTask?.cancel()
-        tokenListenerTask = nil
-
         guard let activity = currentActivity else { return }
+        tokenListenerTasks.removeValue(forKey: activity.id)?.cancel()
 
         await activity.end(
             ActivityContent(
@@ -172,14 +175,13 @@ final class ClassLiveActivityManager {
     }
 
     func observePushTokenUpdates(for activity: Activity<ClassActivityAttributes>) {
-        tokenListenerTask?.cancel()
-
-        tokenListenerTask = Task {
+        guard tokenListenerTasks[activity.id] == nil else { return }
+        tokenListenerTasks[activity.id] = Task {
+            defer { tokenListenerTasks[activity.id] = nil }
             for await tokenData in activity.pushTokenUpdates {
                 let token = tokenData.map { String(format: "%02x", $0) }.joined()
                 UserDefaults.standard.set(token, forKey: Self.latestPushTokenDefaultsKey)
                 UserDefaults.standard.set(activity.id, forKey: Self.latestActivityIDDefaultsKey)
-                print("Live Activity push token updated: \(token)")
 
                 await LiveActivityPushRegistrationClient.shared.register(
                     activityID: activity.id,

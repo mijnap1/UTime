@@ -54,12 +54,10 @@ Deno.serve(async (request) => {
   }
 
   const config = { supabaseUrl, secretKey };
-  await deleteScheduleRows(config, payload.install_id);
 
   const rows = payload.events
     .filter((event) => new Date(event.end_time).getTime() > Date.now())
     .map((event) => ({
-      install_id: payload.install_id,
       event_uid: event.event_uid,
       course_code: event.course_code,
       building: event.building ?? null,
@@ -71,19 +69,21 @@ Deno.serve(async (request) => {
       end_time: event.end_time,
       live_activity_lead_minutes: clampMinutes(payload.live_activity_lead_minutes),
       alert_cue_minutes: clampMinutes(payload.alert_cue_minutes),
-      push_stage: "pending",
-      updated_at: new Date().toISOString(),
     }));
 
-  if (rows.length > 0) {
-    await insertScheduleRows(config, rows);
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/sync_class_schedule`, {
+    method: "POST", headers: { ...dbHeaders(config), "Content-Type": "application/json" },
+    body: JSON.stringify({ p_install_id: payload.install_id, p_events: rows }),
+  });
+  if (!response.ok) {
+    console.error("Atomic schedule sync failed", response.status);
+    return json({ error: "Schedule sync failed; your previous schedule was retained" }, 500);
   }
-
   return json({ ok: true, synced: rows.length });
 });
 
 function validatePayload(payload: ScheduleSyncPayload) {
-  if (!payload.install_id) {
+  if (!payload || typeof payload.install_id !== "string" || !payload.install_id) {
     return "Missing install_id";
   }
 
@@ -99,52 +99,19 @@ function validatePayload(payload: ScheduleSyncPayload) {
     return "Missing alert_cue_minutes";
   }
 
+  const ids = new Set<string>();
   for (const event of payload.events) {
-    if (!event.event_uid || !event.course_code || !event.start_time || !event.end_time) {
+    if (!event || !event.event_uid || !event.course_code || !event.start_time || !event.end_time) {
       return "Schedule event is missing required fields";
     }
+    const start = Date.parse(event.start_time), end = Date.parse(event.end_time);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || ids.has(event.event_uid)) {
+      return "Schedule contains invalid dates or duplicate events";
+    }
+    ids.add(event.event_uid);
   }
 
   return null;
-}
-
-async function deleteScheduleRows(
-  config: { supabaseUrl: string; secretKey: string },
-  installID: string,
-) {
-  const url = new URL(`${config.supabaseUrl}/rest/v1/class_schedules`);
-  url.searchParams.set("install_id", `eq.${installID}`);
-
-  const response = await fetch(url, {
-    method: "DELETE",
-    headers: {
-      ...dbHeaders(config),
-      "Prefer": "return=minimal",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Could not clear schedule rows: ${await response.text()}`);
-  }
-}
-
-async function insertScheduleRows(
-  config: { supabaseUrl: string; secretKey: string },
-  rows: Array<Record<string, unknown>>,
-) {
-  const response = await fetch(`${config.supabaseUrl}/rest/v1/class_schedules`, {
-    method: "POST",
-    headers: {
-      ...dbHeaders(config),
-      "Content-Type": "application/json",
-      "Prefer": "return=minimal",
-    },
-    body: JSON.stringify(rows),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Could not insert schedule rows: ${await response.text()}`);
-  }
 }
 
 function clampMinutes(value: number) {

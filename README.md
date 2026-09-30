@@ -158,14 +158,25 @@ For Live Activities, use a device or simulator/runtime that supports ActivityKit
 
 Open **Alerts** to set Live Activity timing after saving your timetable.
 
+## Automatic Live Activity Sync
+
+Supabase checks due classes every minute and sends ActivityKit pushes through APNs. Schedule uploads are atomic and retain delivery progress on retries. Failed devices are isolated so they do not stop the batch.
+
+The app retries temporary connection failures and resyncs when opened. In **Alerts → Automatic Live Activities**, check the schedule and device registration status, or tap **Retry connection**.
+
+After installing an updated build on your iPhone, open it online once to sync. Test a class with the app in the background and the phone locked, checking its start, countdown cue, and end. A successful sync or APNs response does not prove that iOS displayed the activity.
+
 ## Checks
 
 ```sh
+node --experimental-strip-types tests/backend-sync.mjs
 swiftc UofTimetable/CourseReminderSnapshot.swift UofTimetable/ManualCourse.swift tests/ManualCourseChecks.swift -o /tmp/manual-course-checks
 /tmp/manual-course-checks
 swiftc UofTimetable/CourseReminderSnapshot.swift UofTimetable/ManualCourse.swift UofTimetable/TimetableImageParser.swift tests/TimetableImageChecks.swift -o /tmp/timetable-image-checks
 /tmp/timetable-image-checks
 ```
+
+Database regression checks are in `tests/backend-sync.sql`. Run them with the migration loaded inside a transaction and always roll back; they verify retry preservation, failure rollback, due filtering, and schedule clearing.
 
 The image checks also accept the original sample PNG path as an argument to validate actual Vision output against the expected four courses and nine weekly meetings.
 

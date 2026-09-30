@@ -2285,6 +2285,7 @@ private struct PrimaryActionButton: View {
                 .font(OnboardingFont.semibold(15))
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .foregroundStyle(.white)

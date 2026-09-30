@@ -31,6 +31,17 @@ struct ManualCourseChecks {
                 fatalError("Invalid course was accepted")
             } catch is ManualCourse.ValidationError {} catch { fatalError("Unexpected error: \(error)") }
         }
+        course.meetings[0].scanConfirmed = false
+        rejects(course, start, end)
+        let confirmed = try course.occurrences(from: start, through: end, reviewedScan: true)
+        assert(confirmed.count == 5, "One explicit scan confirmation permits saving all reviewed meetings")
+        course.meetings[0].weekday = 0
+        do {
+            _ = try course.occurrences(from: start, through: end, reviewedScan: true)
+            fatalError("Confirmation must not bypass a missing day")
+        } catch is ManualCourse.ValidationError {}
+        course.meetings[0].weekday = 2
+        course.meetings[0].scanConfirmed = true
         rejects(course, end, start)
         rejects(course, start, date(2028, 1, 1))
         rejects(course, date(2026, 10, 27), date(2026, 10, 27))

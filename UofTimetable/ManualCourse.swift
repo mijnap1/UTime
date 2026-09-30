@@ -9,6 +9,8 @@ nonisolated struct ManualMeeting: Identifiable, Sendable {
     var building = ""
     var room = ""
     var isOnline = false
+    var reviewNote = ""
+    var scanConfirmed = true
 }
 
 nonisolated struct ManualCourse: Identifiable, Sendable {
@@ -23,7 +25,7 @@ nonisolated struct ManualCourse: Identifiable, Sendable {
         return calendar
     }
 
-    func occurrences(from firstDate: Date, through lastDate: Date) throws -> [CourseEventDraft] {
+    func occurrences(from firstDate: Date, through lastDate: Date, reviewedScan: Bool = false) throws -> [CourseEventDraft] {
         let calendar = Self.calendar
         let first = calendar.startOfDay(for: firstDate)
         let last = calendar.startOfDay(for: lastDate)
@@ -36,7 +38,11 @@ nonisolated struct ManualCourse: Identifiable, Sendable {
         guard !meetings.isEmpty else { throw ValidationError("Add at least one meeting.") }
         var drafts: [CourseEventDraft] = []
         for meeting in meetings {
-            guard (1...7).contains(meeting.weekday), (0..<1440).contains(meeting.startMinute),
+            guard meeting.scanConfirmed || reviewedScan else { throw ValidationError("Check and confirm the flagged meeting for \(courseCode).") }
+            guard (1...7).contains(meeting.weekday) else {
+                throw ValidationError("Choose a day for every meeting in \(courseCode).")
+            }
+            guard (0..<1440).contains(meeting.startMinute),
                   (1..<1440).contains(meeting.endMinute), meeting.endMinute > meeting.startMinute else {
                 throw ValidationError("Each meeting must end after it starts on the same day.")
             }

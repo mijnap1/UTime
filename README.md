@@ -38,20 +38,22 @@ The app is organized around a bottom navigation bar with four focused sections:
 - **Alerts** controls when Live Activities appear and when urgent cues should start.
 - **Profile** keeps local student context and app actions in one quiet place.
 
-## v2.1 Highlights
+## v2.2 Highlights
 
-Version `2.1` makes it easier to add a timetable with two options: upload an ACORN PNG or enter courses manually.
+Version `2.2` improves timetable image recognition and makes the upload flow easier to complete.
 
-- **PNG import:** Choose an image from Photos or a PNG from Files. On-device text recognition reads course codes, meeting days, times, and locations from the table below the timetable grid.
-- **Manual entry:** Add courses with term dates and multiple weekly lectures, tutorials, labs, or seminars, including rooms and online meetings.
-- **Review before saving:** Compare scanned details with the original image, correct meetings, confirm term dates, and remove holidays or cancelled classes from the generated dates.
-- **Visible import actions:** **Review & import**, **Review dates**, and the final **Import schedule** button stay at the bottom of their screens.
-- **Preserve your schedule:** New courses are added alongside existing classes. ICS import has been removed; previously saved schedules remain available.
-- **Consistent class times:** Weekly meetings use Toronto time and retain their local start times across daylight-saving changes.
+- **Better screenshot recognition:** Rescans the course table separately from Safari controls and retries missing day labels in a focused crop.
+- **Multiple meetings per course:** Preserves separate lectures and tutorials, including rows that list more than one day. Missing days can be recovered from an unambiguous grid match after checking the other meetings for that course.
+- **Improved time interpretation:** Uses the grid’s chronological hour sequence to distinguish morning and afternoon times. Ambiguous AM/PM still requires review.
+- **Editable scan results:** Keeps unreadable fields in the draft with clear correction prompts instead of rejecting the whole timetable. Lecture section numbers are optional.
+- **Simpler upload:** One confirmation covers the reviewed scan. **Upload timetable** saves directly, while **Preview class dates (optional)** lets you remove holidays first. Missing required details show an explanation when you tap Upload.
+- **Easier-to-tap buttons:** **Upload timetable** and **Add a course** respond across their full visible button area, including the sides, without making the surrounding card tappable.
+
+PNG import and manual entry remain available. New classes are added alongside existing schedules; ICS import remains removed.
 
 ## Screenshots
 
-The images below and above show earlier app screens; the v2.1 timetable-entry screens are not pictured yet.
+The images below and above show earlier app screens; the v2.2 timetable-entry screens are not pictured yet.
 
 <p align="center">
   <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">
@@ -93,7 +95,7 @@ The goal is not to mirror the whole schedule on the Lock Screen. UTime only surf
 
 Manual entry uses Toronto time and expands weekly meetings across the selected term, preserving local class times across daylight-saving changes. Set in-person locations or mark a meeting as online. Review class dates before saving; holidays and reading week are not excluded automatically. Saved occurrences can be deleted individually from Schedule.
 
-ICS import has been removed. Existing saved schedules remain available. PNG import reads the full Course / Day / Time / Location table beneath the grid. Grid-only screenshots are not supported. The review includes the original image and requires confirmation of meetings and exact term dates. AM/PM is inferred (1–7 default to afternoon), so check times before saving. The image does not provide holidays or the winter schedule of a year-long course.
+ICS import has been removed. Existing saved schedules remain available. PNG import reads the full Course / Day / Time / Location table beneath the grid. Grid-only screenshots are not supported. The review includes the original image and requires confirmation of meetings and exact term dates. The importer rescans the table separately from browser controls and matches course labels to the grid’s chronological hour sequence. Unmarked AM/PM still requires confirmation. Missing or unreadable fields stay in the editable draft with review flags instead of rejecting the entire schedule; unresolved times show explicitly labeled placeholders. One “I checked all meetings and term dates” confirmation covers the reviewed scan; missing days, course codes, and invalid times must still be corrected. Lecture section numbers are optional. The image does not provide holidays or the winter schedule of a year-long course.
 
 ## Privacy and Data
 
@@ -141,17 +143,17 @@ For Live Activities, use a device or simulator/runtime that supports ActivityKit
 ### Upload an ACORN PNG
 
 1. Open **Schedule** and tap **Upload timetable**.
-2. Choose **Choose from Photos** or **Choose PNG from Files**. Include the full Course / Day / Time / Location table below the grid; images must be 20 MB or smaller.
+2. Choose **Choose from Photos** or **Choose PNG from Files**. Include the entire grid with hour labels and the full Course / Day / Time / Location table; Safari bars are okay. Images must be 20 MB or smaller.
 3. After recognition finishes, tap **Review & import** at the bottom.
-4. Compare the extracted courses with the original PNG, correct any details, and set the exact term dates. Check AM/PM, since the export omits it.
-5. Turn on **I checked all meetings and term dates**, then tap **Review dates**.
-6. Swipe left on dates to exclude holidays, reading week, or cancelled classes, then tap **Import schedule**.
+4. Compare the extracted courses with the original PNG, correct any details, and set the exact term dates. Correct any flagged meeting details, including AM/PM, before confirming the scan.
+5. Turn on **I checked all meetings and term dates**, then tap **Upload timetable** to save.
+6. To exclude holidays, reading week, or cancelled classes first, open **Preview class dates (optional)**, swipe left on dates, and tap **Upload timetable**.
 
 ### Enter courses manually
 
 1. Open **Schedule** and tap **Add a course**.
 2. Enter the course, term dates, and weekly meetings. Use **Add another meeting** for additional days, tutorials, or labs.
-3. Tap **Review dates**, remove any excluded dates, then tap **Save course**.
+3. Tap **Save course**, or open **Preview class dates (optional)** to remove excluded dates before saving.
 4. Repeat for the next course; term dates are remembered.
 
 Open **Alerts** to set Live Activity timing after saving your timetable.

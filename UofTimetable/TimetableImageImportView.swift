@@ -19,7 +19,7 @@ struct TimetableImageImportView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Use the full ACORN timetable PNG, including the Course, Day, Time, and Location table below the grid.")
+                    Text("Choose a clear ACORN screenshot or PNG with the entire grid, hour labels, and Course / Day / Time / Location table. Safari bars are okay. Lecture section numbers are optional.")
                     Text("Text recognition happens on your device. You'll check the extracted meetings and set term dates before anything is saved.")
                         .foregroundStyle(.secondary)
                 }

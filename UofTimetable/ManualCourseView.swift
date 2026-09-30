@@ -6,6 +6,7 @@ struct ManualCourseView: View {
     @AppStorage("manualTermEnd") private var termEnd = Date().addingTimeInterval(90 * 86400).timeIntervalSince1970
     @State private var courses: [ManualCourse]
     @State private var hasReviewedImage = false
+    @State private var isSaving = false
     let isImageImport: Bool
     let sourceImageData: Data?
     @State private var review: [CourseEventDraft] = []
@@ -49,10 +50,16 @@ struct ManualCourseView: View {
 
                 ForEach($course.meetings) { $meeting in
                     Section {
+                        if !meeting.reviewNote.isEmpty {
+                            Label("Check this meeting", systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            Text(meeting.reviewNote).font(.footnote)
+                        }
                         Picker("Type", selection: $meeting.type) {
                             ForEach(["Lecture", "Tutorial", "Lab", "Seminar"], id: \.self) { Text($0) }
                         }
                         Picker("Day", selection: $meeting.weekday) {
+                            Text("Choose day").tag(0)
                             ForEach([2, 3, 4, 5, 6, 7, 1], id: \.self) { day in
                                 Text(ManualCourse.calendar.weekdaySymbols[day - 1]).tag(day)
                             }
@@ -78,7 +85,7 @@ struct ManualCourseView: View {
                         Label("Add another meeting", systemImage: "plus.circle")
                     }
                 } footer: {
-                    Text("Add a meeting for each day, tutorial, or lab. Review individual dates before saving to remove holidays or reading week.")
+                    Text("Add a meeting for each day, tutorial, or lab. Use Preview class dates to remove holidays or reading week before saving.")
                 }
                     if isImageImport {
                         Button("Remove \(course.code)", role: .destructive) {
@@ -90,7 +97,7 @@ struct ManualCourseView: View {
                     Section {
                         Text("Check your meetings and term dates before continuing.")
                     } header: { Text("Confirm the scan") } footer: {
-                        Text("Compare every meeting with your PNG. AM/PM is inferred: 1–7 are treated as afternoon. Exact term dates, holidays, and winter meetings for year-long courses aren't in this image. Enter the correct dates above and remove holidays in the next step.")
+                        Text("Check every flagged meeting against ACORN, especially AM/PM. The grid helps order hours but does not always prove morning versus evening. Missing section numbers are optional. Enter exact term dates above and use Preview class dates to remove holidays; winter meetings for year-long courses are not included in a fall screenshot.")
                     }
                 }
             }
@@ -100,18 +107,24 @@ struct ManualCourseView: View {
                         Toggle("I checked all meetings and term dates", isOn: $hasReviewedImage)
                             .font(.subheadline)
                     }
-                    Button {
+                    Button("Preview class dates (optional)") {
                         do {
-                            review = try courses.flatMap { try $0.occurrences(from: Date(timeIntervalSince1970: termStart), through: Date(timeIntervalSince1970: termEnd)) }.sorted { $0.startTime < $1.startTime }
+                            review = try preparedDates()
                             isReviewing = true
                         } catch { errorMessage = error.localizedDescription }
+                    }
+                    .disabled(isSaving)
+                    Button {
+                        do { saveDates(try preparedDates()) }
+                        catch { errorMessage = error.localizedDescription }
                     } label: {
-                        Text("Review dates")
+                        Text(isSaving ? "Saving…" : (isImageImport ? "Upload timetable" : "Save course"))
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(courses.isEmpty || (isImageImport && !hasReviewedImage))
+                    .disabled(isSaving)
+
                 }
                 .padding()
                 .background(.regularMaterial)
@@ -147,18 +160,14 @@ struct ManualCourseView: View {
                 }
                 .navigationTitle("Review class dates")
                 .safeAreaInset(edge: .bottom) {
-                    Button {
-                        do {
-                            try save(review)
-                            dismiss()
-                        } catch { errorMessage = error.localizedDescription }
+                    Button { saveDates(review)
                     } label: {
-                        Text(isImageImport ? "Import schedule" : "Save course")
+                        Text(isSaving ? "Saving…" : (isImageImport ? "Upload timetable" : "Save course"))
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(review.isEmpty)
+                    .disabled(review.isEmpty || isSaving)
                     .padding()
                     .background(.regularMaterial)
                 }
@@ -169,9 +178,32 @@ struct ManualCourseView: View {
         .confirmationDialog("Discard these changes?", isPresented: $isConfirmingDiscard, titleVisibility: .visible) {
             Button("Discard changes", role: .destructive) { dismiss() }
         }
-        .alert("Couldn't add course", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+        .alert(isImageImport ? "Couldn't upload timetable" : "Couldn't save course", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+    }
+
+    private func preparedDates() throws -> [CourseEventDraft] {
+        guard !courses.isEmpty else { throw ManualCourse.ValidationError("Add at least one course before saving.") }
+        guard !isImageImport || hasReviewedImage else {
+            throw ManualCourse.ValidationError("Check your courses, AM/PM, and term dates, then turn on ‘I checked all meetings and term dates’ above the button.")
+        }
+        return try courses.flatMap {
+            try $0.occurrences(from: Date(timeIntervalSince1970: termStart), through: Date(timeIntervalSince1970: termEnd), reviewedScan: isImageImport && hasReviewedImage)
+        }.sorted { $0.startTime < $1.startTime }
+    }
+
+    private func saveDates(_ dates: [CourseEventDraft]) {
+        guard !isSaving else { return }
+        guard !dates.isEmpty else { errorMessage = "There are no class dates to save."; return }
+        isSaving = true
+        do {
+            try save(dates)
+            dismiss()
+        } catch {
+            isSaving = false
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func termDate(_ value: Binding<Double>) -> Binding<Date> {

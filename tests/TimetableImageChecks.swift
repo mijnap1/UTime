@@ -7,12 +7,12 @@ struct TimetableImageChecks {
         assert(mw == [2, 4])
         let ttf = try TimetableImageParser.weekdays("Tu Th F")
         assert(ttf == [3, 5, 6])
-        let afternoon = try TimetableImageParser.timeRange("1:00 - 3:00")
+        let afternoon = try TimetableImageParser.timeRange("1:00 - 3:00", startHour: 13)
         assert(afternoon.0 == 780 && afternoon.1 == 900)
-        let noon = try TimetableImageParser.timeRange("11:00 – 1:00")
+        let noon = try TimetableImageParser.timeRange("11:00 – 1:00", startHour: 11)
         assert(noon.0 == 660 && noon.1 == 780)
         for text in ["9:00 - 11:00t", "9:00 - 11:00†", "9:00 - 11:00ł", "9:00 - 11:00!", "9:00 - 11:00|", "9:00 - 11:00t’."] {
-            let range = try TimetableImageParser.timeRange(text)
+            let range = try TimetableImageParser.timeRange(text, startHour: 9)
             assert(range.0 == 540 && range.1 == 660, "Phone OCR trailing marks: \(text)")
         }
         func rejects(_ work: () throws -> Void) {
@@ -25,15 +25,13 @@ struct TimetableImageChecks {
         rejects { _ = try TimetableImageParser.timeRange("9:00 - 9:00") }
         rejects { _ = try TimetableImageParser.timeRange("unreadable") }
         for text in ["9:00 - 11:001", "9:00 - 11:00 12:00", "9:00 - 11:00 PM", "9:00 - 11:00 Tuesday", "9:80 - 11:00t"] {
-            rejects { _ = try TimetableImageParser.timeRange(text) }
+            rejects { _ = try TimetableImageParser.timeRange(text, startHour: 9) }
         }
-        // A partial row must fail rather than silently importing an incomplete schedule.
         let headers = ["Course", "Day", "Time", "Location"].enumerated().map { index, text in
             TimetableImageParser.Cell(text: text, bounds: CGRect(x: Double(index) * 0.24, y: 0.5, width: 0.1, height: 0.02))
         }
-        rejects {
-            _ = try TimetableImageParser.parse(headers + [.init(text: "CSC148H1 F LEC", bounds: CGRect(x: 0, y: 0.45, width: 0.2, height: 0.02))])
-        }
+        let partial = try TimetableImageParser.parse(headers + [.init(text: "CSC148H1 F LEC", bounds: CGRect(x: 0, y: 0.45, width: 0.2, height: 0.02))])
+        assert(partial[0].meetings[0].weekday == 0 && !partial[0].meetings[0].scanConfirmed)
         let phoneRow = [
             TimetableImageParser.Cell(text: "CSC148H1 F LEC", bounds: CGRect(x: 0, y: 0.45, width: 0.2, height: 0.02)),
             .init(text: "W", bounds: CGRect(x: 0.24, y: 0.45, width: 0.1, height: 0.02)),
@@ -42,9 +40,9 @@ struct TimetableImageChecks {
         ]
         let phoneCourses = try TimetableImageParser.parse(headers + phoneRow)
         assert(phoneCourses.count == 1 && phoneCourses[0].meetings.count == 1)
-        assert(phoneCourses[0].meetings[0].startMinute == 540 && phoneCourses[0].meetings[0].endMinute == 660)
+        assert(!phoneCourses[0].meetings[0].scanConfirmed && phoneCourses[0].meetings[0].reviewNote.contains("placeholder"))
         assert(phoneCourses[0].meetings[0].room == "103")
-        let spaced = try TimetableImageParser.timeRange("９ : ００ − １１ : ００")
+        let spaced = try TimetableImageParser.timeRange("９ : ００ − １１ : ００", startHour: 9)
         assert(spaced.0 == 540 && spaced.1 == 660)
         let names = try TimetableImageParser.weekdays("Monday / Wednesday")
         assert(names == [2, 4])
@@ -59,7 +57,8 @@ struct TimetableImageChecks {
         let orphan = phoneRow.dropFirst().map {
             TimetableImageParser.Cell(text: $0.text, bounds: $0.bounds.offsetBy(dx: 0, dy: -0.05))
         }
-        rejects { _ = try TimetableImageParser.parse(headers + phoneRow + orphan) }
+        let withOrphan = try TimetableImageParser.parse(headers + phoneRow + orphan)
+        assert(withOrphan.count == 2 && withOrphan[1].code.isEmpty && !withOrphan[1].meetings[0].scanConfirmed)
         let splitCourse = [
             TimetableImageParser.Cell(text: "CSC148H1", bounds: CGRect(x: 0, y: 0.45, width: 0.13, height: 0.02)),
             .init(text: "F LEC", bounds: CGRect(x: 0.15, y: 0.45, width: 0.05, height: 0.02))
@@ -67,7 +66,71 @@ struct TimetableImageChecks {
         let paddedHeaders = headers.map { TimetableImageParser.Cell(text: " \($0.text): ", bounds: $0.bounds) }
         let split = try TimetableImageParser.parse(paddedHeaders + splitCourse + Array(phoneRow.dropFirst()))
         assert(split.count == 1 && split[0].code == "CSC148H1" && split[0].meetings.count == 1)
-        assert(split[0].meetings[0].endMinute == 660)
+        assert(!split[0].meetings[0].scanConfirmed)
+        // The same printed 9:00 resolves differently by vertical grid position.
+        let day = TimetableImageParser.Cell(text: "Mon", bounds: CGRect(x: 0.25, y: 0.92, width: 0.1, height: 0.02))
+        let axis = (9...22).map { hour in
+            TimetableImageParser.Cell(text: "\(hour > 12 ? hour - 12 : hour):00", bounds: CGRect(x: 0, y: 0.88 - Double(hour - 9) * 0.025, width: 0.1, height: 0.015))
+        }
+        let eveningLabel = TimetableImageParser.Cell(text: "CSC148H", bounds: CGRect(x: 0.25, y: axis[12].bounds.minY + 0.005, width: 0.1, height: 0.01))
+        let gridHour = TimetableImageParser.gridStartHour([day, eveningLabel] + axis, tableHeader: headers[0], code: "CSC148H1", weekday: 2, time: "9:00 - 11:00")
+        assert(gridHour == 21)
+        let evening = try TimetableImageParser.timeRange("9:00 - 11:00", startHour: gridHour)
+        assert(evening.0 == 1260 && evening.1 == 1380)
+        rejects { _ = try TimetableImageParser.timeRange("9:00 - 11:00") }
+        let morningLabel = TimetableImageParser.Cell(text: "CSC148H", bounds: CGRect(x: 0.25, y: axis[0].bounds.minY + 0.005, width: 0.1, height: 0.01))
+        let ambiguous = TimetableImageParser.gridStartHour([day, morningLabel, eveningLabel] + axis, tableHeader: headers[0], code: "CSC148H1", weekday: 2, time: "9:00 - 11:00")
+        assert(ambiguous == nil)
+        let toolbar = TimetableImageParser.Cell(text: "42", bounds: CGRect(x: 0.7, y: 0.06, width: 0.05, height: 0.02))
+        let withoutToolbar = try TimetableImageParser.parse(headers + phoneRow + [toolbar])
+        assert(withoutToolbar.count == 1)
+        let calendar = ManualCourse.calendar
+        let first = calendar.date(from: DateComponents(year: 2026, month: 9, day: 7))!
+        let last = calendar.date(from: DateComponents(year: 2026, month: 9, day: 11))!
+        rejects { _ = try phoneCourses[0].occurrences(from: first, through: last) }
+        var corrected = phoneCourses[0]
+        corrected.meetings[0].endMinute = 660
+        corrected.meetings[0].scanConfirmed = true
+        let saved = try corrected.occurrences(from: first, through: last)
+        assert(saved.count == 1 && calendar.component(.hour, from: saved[0].endTime) == 11)
+        // Reproduce the phone losing W while preserving repeated course rows.
+        typealias Cell = TimetableImageParser.Cell
+        let weekHeaders = [("Mon", 0.2), ("Tue", 0.4), ("Wed", 0.6), ("Thu", 0.8), ("Fri", 0.92)].map {
+            Cell(text: $0.0, bounds: CGRect(x: $0.1, y: 0.92, width: 0.05, height: 0.02))
+        }
+        let weekAxis = (9...14).map { hour in
+            Cell(text: "\(hour > 12 ? hour - 12 : hour):00", bounds: CGRect(x: 0, y: 0.86 - Double(hour - 9) * 0.05, width: 0.1, height: 0.015))
+        }
+        func block(_ code: String, _ x: Double, _ hour: Int) -> Cell {
+            Cell(text: code, bounds: CGRect(x: x, y: 0.87 - Double(hour - 9) * 0.05, width: 0.05, height: 0.01))
+        }
+        let weekGrid = weekHeaders + weekAxis + [block("CSC148H", 0.2, 10), block("CSC148H", 0.6, 9), block("CSC148H", 0.8, 9), block("MAT135H", 0.4, 13), block("MAT135H", 0.8, 13), block("MAT135H", 0.92, 11)]
+        func row(_ code: String, _ day: String, _ time: String, _ room: String, _ y: Double) -> [Cell] {
+            [code, day, time, room].enumerated().compactMap { index, text in
+                text.isEmpty ? nil : Cell(text: text, bounds: CGRect(x: Double(index) * 0.24, y: y, width: 0.1, height: 0.015))
+            }
+        }
+        let cscMissing = row("CSC148H1 F LEC", "", "9:00 - 11:00", "MP 103", 0.46)
+        let cscMonday = row("CSC148H1 F LEC", "M", "10:00 - 11:00", "MS 2158", 0.43)
+        let cscThursday = row("CSC148H1 F TUT", "Th", "9:00 - 11:00", "BA 3185", 0.40)
+        let mathTuesday = row("MAT135H1 F LEC", "", "1:00 - 3:00", "MP 102", 0.37)
+        let mathThursday = row("MAT135H1 F LEC", "Th", "1:00 - 2:00", "MP 203", 0.34)
+        let mathFriday = row("MAT135H1 F TUT", "F", "11:00 - 12:00", "FE 324", 0.31)
+        let multiDay = row("AFR280Y1 Y LEC", "M W", "1:00 - 3:00", "Online", 0.28)
+        let recovered = try TimetableImageParser.parse(headers + weekGrid + cscMissing + cscMonday + cscThursday + mathTuesday + mathThursday + mathFriday + multiDay)
+        assert(recovered[0].meetings.map(\.weekday) == [4, 2, 5])
+        assert(recovered[0].meetings[0].startMinute == 540 && recovered[0].meetings[0].endMinute == 660)
+        assert(recovered[0].meetings[0].room == "103" && recovered[0].meetings[0].type == "Lecture")
+        assert(recovered[1].meetings.map(\.weekday) == [3, 5, 6])
+        assert(recovered[1].meetings[0].startMinute == 780 && recovered[1].meetings[0].endMinute == 900)
+        assert(recovered[2].meetings.map(\.weekday) == [2, 4])
+        let cscDates = try recovered[0].occurrences(from: first, through: last, reviewedScan: true)
+        assert(cscDates.count == 3 && Set(cscDates.map(\.uid)).count == 3)
+        let unresolved = try TimetableImageParser.parse(headers + weekGrid + cscMissing + cscMonday)
+        assert(unresolved[0].meetings[0].weekday == 0, "Two available grid matches must stay unresolved")
+        let competing = row("MAT135H1 F LEC", "", "1:00 - 3:00", "MP 999", 0.28)
+        let disputed = try TimetableImageParser.parse(headers + weekGrid + cscMissing + cscMonday + cscThursday + mathTuesday + mathThursday + mathFriday + competing)
+        assert(disputed[1].meetings.filter { $0.weekday == 0 }.count == 2, "Two missing rows cannot both claim one grid block")
         if let path = CommandLine.arguments.dropFirst().first {
             let courses = try TimetableImageParser.scan(Data(contentsOf: URL(fileURLWithPath: path)))
             assert(courses.map(\.code) == ["AFR280Y1", "CSC148H1", "ESS205H1", "MAT135H1"])

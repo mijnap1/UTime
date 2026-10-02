@@ -162,7 +162,7 @@ Open **Alerts** to set Live Activity timing after saving your timetable.
 
 Supabase checks due classes every minute and sends ActivityKit pushes through APNs. Schedule uploads are atomic and retain delivery progress on retries. Failed devices are isolated so they do not stop the batch.
 
-The app retries temporary connection failures and resyncs when opened. In **Alerts → Automatic Live Activities**, check the schedule and device registration status, or tap **Retry connection**.
+The app retries temporary connection failures and resyncs when opened. In **Alerts → Automatic Live Activities**, check for **Schedule synced** and **Device registration: Connected**, or tap **Retry connection**.
 
 After installing an updated build on your iPhone, open it online once to sync. Test a class with the app in the background and the phone locked, checking its start, countdown cue, and end. A successful sync or APNs response does not prove that iOS displayed the activity.
 

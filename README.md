@@ -51,17 +51,6 @@ Version `2.4` adds UofT-specific sign-up options, dark mode, a cleaner Profile, 
 
 PNG import and manual entry remain available; ICS import remains removed.
 
-## v2.3 Highlights
-
-Version `2.3` improves timetable image recognition and makes the upload flow easier to complete.
-
-- **Better screenshot recognition:** Rescans the course table separately from Safari controls and retries missing day labels in a focused crop.
-- **Multiple meetings per course:** Preserves separate lectures and tutorials, including rows that list more than one day. Missing days can be recovered from an unambiguous grid match after checking the other meetings for that course.
-- **Improved time interpretation:** Uses the grid’s chronological hour sequence to distinguish morning and afternoon times. Ambiguous AM/PM still requires review.
-- **Editable scan results:** Keeps unreadable fields in the draft with clear correction prompts instead of rejecting the whole timetable. Lecture section numbers are optional.
-- **Simpler upload:** One confirmation covers the reviewed scan. **Upload timetable** saves directly, while **Preview class dates (optional)** lets you remove holidays first. Missing required details show an explanation when you tap Upload.
-- **Easier-to-tap buttons:** **Upload timetable** and **Add a course** respond across their full visible button area, including the sides, without making the surrounding card tappable.
-
 ## Core Features
 
 ### Today

@@ -51,6 +51,17 @@ Version `2.4` adds UofT-specific sign-up options, dark mode, a cleaner Profile, 
 
 PNG import and manual entry remain available; ICS import remains removed.
 
+## Screenshots
+
+The images below and above show earlier app screens; the v2.4 screens are not pictured yet.
+
+<p align="center">
+  <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">
+  <img src="docs/readme/dynamic-island.png" alt="UTime Dynamic Island compact class update" width="45%">
+</p>
+
+UTime is designed around native iPhone surfaces instead of becoming another heavy calendar screen. The app keeps the main interface calm, then uses Lock Screen and Dynamic Island surfaces when timing matters.
+
 ## Core Features
 
 ### Today

@@ -86,11 +86,11 @@ struct ContentView: View {
                     }
                 }
                 .sheet(isPresented: $isAddingCourse) {
-                    ManualCourseView(save: addCourse)
+                    ManualCourseView(save: { try addCourse($0) })
                 }
                 .sheet(isPresented: $isImportingImage) {
                     TimetableImageImportView { drafts in
-                        try addCourse(drafts)
+                        try addCourse(drafts, replacingSchedule: true)
                         isImportingImage = false
                     }
                 }
@@ -159,16 +159,6 @@ struct ContentView: View {
                 clearAction: clearSchedule
             )
         case .alerts:
-            ActionPanel(title: "Automatic Live Activities", subtitle: backendSyncStatus) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Device registration: \(pushStartSyncStatus)").font(.footnote)
-                    Text("Synced schedules let the server send updates while UTime is closed. Delivery still depends on iOS and network access.").font(.footnote)
-                    Button("Retry connection") {
-                        syncSchedule()
-                        Task { await PushToStartTokenManager.shared.retryRegistrations() }
-                    }
-                }
-            }
             ReminderSettingsCard(
                 leadMinutes: $reminderLeadMinutes,
                 alertCueMinutes: $alertCueMinutes,
@@ -181,7 +171,13 @@ struct ContentView: View {
                 upcomingCount: upcomingEvents.count,
                 leadMinutes: reminderLeadMinutes,
                 alertCueMinutes: alertCueMinutes,
-                isPaused: isLiveActivityPaused
+                isPaused: isLiveActivityPaused,
+                backendStatus: backendSyncStatus,
+                deviceStatus: pushStartSyncStatus,
+                retryAction: {
+                    syncSchedule()
+                    Task { await PushToStartTokenManager.shared.retryRegistrations() }
+                }
             )
         case .profile:
             ProfileSummaryCard(
@@ -195,8 +191,13 @@ struct ContentView: View {
         }
     }
 
-    private func addCourse(_ drafts: [CourseEventDraft]) throws {
-        let existingSnapshots = courseEvents.map(snapshot(from:))
+    private func addCourse(_ drafts: [CourseEventDraft], replacingSchedule: Bool = false) throws {
+        let existingSnapshots = replacingSchedule ? [] : courseEvents.map(snapshot(from:))
+        if replacingSchedule {
+            for event in courseEvents {
+                modelContext.delete(event)
+            }
+        }
         for draft in drafts {
             modelContext.insert(
                 CourseEvent(
@@ -222,10 +223,12 @@ struct ContentView: View {
             throw error
         }
         let snapshots = existingSnapshots + drafts.map(CourseReminderSnapshot.init)
-        restartIslandScheduler(with: snapshots)
+        restartIslandScheduler(with: snapshots, endingCurrentActivity: replacingSchedule)
         syncSchedule(with: snapshots)
         selectedHomeSection = .schedule
-        showToast("Added \(drafts.count) classes to your schedule.")
+        showToast(replacingSchedule
+            ? "Replaced your schedule with \(drafts.count) classes."
+            : "Added \(drafts.count) classes to your schedule.")
     }
 
     private func clearSchedule() {
@@ -285,13 +288,21 @@ struct ContentView: View {
         restartIslandScheduler(with: upcomingEvents.map(snapshot(from:)))
     }
 
-    private func restartIslandScheduler(with snapshots: [CourseReminderSnapshot]) {
+    private func restartIslandScheduler(with snapshots: [CourseReminderSnapshot], endingCurrentActivity: Bool = false) {
         islandTask?.cancel()
-        guard !isLiveActivityPaused else { return }
+        guard !isLiveActivityPaused else {
+            if endingCurrentActivity {
+                Task { await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate) }
+            }
+            return
+        }
 
         let leadMinutes = reminderLeadMinutes
 
         islandTask = Task {
+            if endingCurrentActivity {
+                await ClassLiveActivityManager.shared.end(dismissalPolicy: .immediate)
+            }
             await ClassLiveActivityManager.shared.endIfStartTimePassed()
             await runIslandScheduler(
                 events: snapshots,
@@ -537,7 +548,7 @@ private struct HomeBottomNavigation: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(AppTheme.border.opacity(0.9), lineWidth: 1)
         }
-        .shadow(color: AppTheme.navy.opacity(0.08), radius: 18, y: 10)
+        .shadow(color: AppTheme.shadow.opacity(0.08), radius: 18, y: 10)
     }
 }
 
@@ -553,7 +564,7 @@ private struct AppHeaderView: View {
                     .scaledToFit()
                     .frame(width: 70, height: 70)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(color: AppTheme.navy.opacity(0.14), radius: 18, y: 10)
+                    .shadow(color: AppTheme.shadow.opacity(0.14), radius: 18, y: 10)
 
                 Text("UTime")
                     .font(OnboardingFont.semibold(35))
@@ -573,49 +584,7 @@ private struct AppHeaderView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            .white,
-                            AppTheme.cream.opacity(0.82),
-                            AppTheme.sky.opacity(0.72),
-                            AppTheme.background
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay {
-                    ZStack {
-                        RadialGradient(
-                            colors: [AppTheme.blue.opacity(0.18), .clear],
-                            center: .bottomLeading,
-                            startRadius: 18,
-                            endRadius: 260
-                        )
-
-                        RadialGradient(
-                            colors: [AppTheme.navy.opacity(0.10), .clear],
-                            center: .topTrailing,
-                            startRadius: 8,
-                            endRadius: 230
-                        )
-
-                        LinearGradient(
-                            colors: [.white.opacity(0.82), .white.opacity(0.18), .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(AppTheme.border.opacity(0.8), lineWidth: 1)
-        }
+        .background { HeroCardBackground() }
     }
 
     private var headerCopy: Text {
@@ -636,6 +605,52 @@ private struct AppHeaderView: View {
         return Text("Add your timetable once. UTime keeps your classes ready and brings the next room to your Lock Screen.")
             .font(OnboardingFont.regular(14))
             .foregroundColor(AppTheme.secondaryText)
+    }
+}
+
+private struct HeroCardBackground: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        AppTheme.card,
+                        AppTheme.cream.opacity(0.82),
+                        AppTheme.sky.opacity(0.72),
+                        AppTheme.background
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay {
+                ZStack {
+                    RadialGradient(
+                        colors: [AppTheme.blue.opacity(0.18), .clear],
+                        center: .bottomLeading,
+                        startRadius: 18,
+                        endRadius: 260
+                    )
+
+                    RadialGradient(
+                        colors: [AppTheme.navy.opacity(0.10), .clear],
+                        center: .topTrailing,
+                        startRadius: 8,
+                        endRadius: 230
+                    )
+
+                    LinearGradient(
+                        colors: [AppTheme.highlight.opacity(0.82), AppTheme.highlight.opacity(0.18), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppTheme.border.opacity(0.8), lineWidth: 1)
+            }
     }
 }
 
@@ -706,7 +721,7 @@ private struct WelcomeOnboardingView: View {
                     .scaledToFit()
                     .frame(width: 96, height: 96)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .shadow(color: AppTheme.navy.opacity(0.16), radius: 28, y: 16)
+                    .shadow(color: AppTheme.shadow.opacity(0.16), radius: 28, y: 16)
 
                 VStack(spacing: 8) {
                     Text("UTime")
@@ -733,7 +748,7 @@ private struct WelcomeOnboardingView: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                .white.opacity(0.96),
+                                AppTheme.card.opacity(0.96),
                                 AppTheme.cream.opacity(0.90),
                                 AppTheme.sky.opacity(0.62)
                             ],
@@ -744,7 +759,7 @@ private struct WelcomeOnboardingView: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(.white.opacity(0.86), lineWidth: 1)
+                    .stroke(AppTheme.highlight.opacity(0.86), lineWidth: 1)
             }
             .overlay(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -755,7 +770,7 @@ private struct WelcomeOnboardingView: View {
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
                     )
             }
-            .shadow(color: AppTheme.navy.opacity(0.06), radius: 18, y: 12)
+            .shadow(color: AppTheme.shadow.opacity(0.06), radius: 18, y: 12)
 
             Spacer(minLength: 32)
 
@@ -859,42 +874,6 @@ private struct ProfileSetupView: View {
     @FocusState private var isTextFieldFocused: Bool
 
     private let campuses = ["St. George", "UTM", "UTSC"]
-    private let programs = [
-        "Accounting",
-        "Architecture",
-        "Art History",
-        "Biochemistry",
-        "Biology",
-        "Business",
-        "Chemistry",
-        "Commerce",
-        "Computer Science",
-        "Criminology",
-        "Economics",
-        "Education",
-        "Engineering",
-        "English",
-        "Environmental Science",
-        "Finance",
-        "Global Affairs",
-        "History",
-        "Life Sciences",
-        "Linguistics",
-        "Math & Statistics",
-        "Media Studies",
-        "Music",
-        "Neuroscience",
-        "Nursing",
-        "Philosophy",
-        "Physical Sciences",
-        "Political Science",
-        "Psychology",
-        "Rotman Commerce",
-        "Social Sciences",
-        "Sociology",
-        "Visual Studies",
-        "Other"
-    ]
     private let years = ["1st year", "2nd year", "3rd year", "4th year", "Graduate"]
 
     var body: some View {
@@ -947,7 +926,7 @@ private struct ProfileSetupView: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                .white.opacity(0.96),
+                                AppTheme.card.opacity(0.96),
                                 AppTheme.cream.opacity(0.90),
                                 AppTheme.sky.opacity(0.62)
                             ],
@@ -958,7 +937,7 @@ private struct ProfileSetupView: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(.white.opacity(0.86), lineWidth: 1)
+                    .stroke(AppTheme.highlight.opacity(0.86), lineWidth: 1)
             }
             .overlay(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -969,7 +948,7 @@ private struct ProfileSetupView: View {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
                     )
             }
-            .shadow(color: AppTheme.navy.opacity(0.06), radius: 18, y: 12)
+            .shadow(color: AppTheme.shadow.opacity(0.06), radius: 18, y: 12)
             .padding(.horizontal, 20)
 
             Spacer(minLength: 38)
@@ -983,8 +962,11 @@ private struct ProfileSetupView: View {
                 year = years[0]
             }
 
-            if major.isEmpty {
-                major = programs[0]
+        }
+        .onChange(of: campus) { _, newCampus in
+            let available = UofTPrograms.sections(for: newCampus).flatMap(\.programs)
+            if !available.contains(major) {
+                major = ""
             }
         }
     }
@@ -1004,12 +986,7 @@ private struct ProfileSetupView: View {
         case 1:
             OptionGrid(options: campuses, selection: $campus)
         case 2:
-            OnboardingDropdownField(
-                title: "Program",
-                selection: $major,
-                options: programs,
-                systemImage: "graduationcap.fill"
-            )
+            ProgramPickerField(selection: $major, campus: campus)
         default:
             OptionGrid(options: years, selection: $year)
         }
@@ -1028,7 +1005,7 @@ private struct ProfileSetupView: View {
         switch step {
         case 0: return "This stays on your iPhone and is only used to personalize the app."
         case 1: return "Campus helps UTime feel built around your day."
-        case 2: return "Optional context for your local profile."
+        case 2: return "Pick your program or faculty. Not sure yet? Choose Undeclared."
         default: return "Last one. You can add your timetable from the home screen."
         }
     }
@@ -1100,7 +1077,7 @@ private struct OnboardingBackground: View {
             )
 
             LinearGradient(
-                colors: [.white.opacity(0.78), .white.opacity(0.16), .white.opacity(0.0)],
+                colors: [AppTheme.highlight.opacity(0.78), AppTheme.highlight.opacity(0.16), AppTheme.highlight.opacity(0.0)],
                 startPoint: .top,
                 endPoint: .center
             )
@@ -1210,45 +1187,30 @@ private struct OnboardingTextField: View {
     }
 }
 
-private struct OnboardingDropdownField: View {
-    let title: String
+private struct ProgramPickerField: View {
     @Binding var selection: String
-    let options: [String]
-    let systemImage: String
+    let campus: String
+
+    @State private var isPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text("Program")
                 .font(OnboardingFont.medium(13))
                 .foregroundStyle(AppTheme.secondaryText)
 
-            Menu {
-                ForEach(options, id: \.self) { option in
-                    Button {
-                        var transaction = Transaction()
-                        transaction.animation = nil
-
-                        withTransaction(transaction) {
-                            selection = option
-                        }
-                    } label: {
-                        if selection == option {
-                            Label(option, systemImage: "checkmark")
-                        } else {
-                            Text(option)
-                        }
-                    }
-                }
+            Button {
+                isPresented = true
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: systemImage)
+                    Image(systemName: "graduationcap.fill")
                         .font(.system(size: 15, weight: .semibold, design: .default))
                         .foregroundStyle(AppTheme.blue)
                         .frame(width: 20)
 
-                    Text(selection)
+                    Text(selection.isEmpty ? "Select your program" : selection)
                         .font(OnboardingFont.regular(17))
-                        .foregroundStyle(AppTheme.primaryText)
+                        .foregroundStyle(selection.isEmpty ? AppTheme.secondaryText : AppTheme.primaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
 
@@ -1268,10 +1230,66 @@ private struct OnboardingDropdownField: View {
                 }
             }
             .buttonStyle(.plain)
-            .transaction { transaction in
-                transaction.animation = nil
+        }
+        .sheet(isPresented: $isPresented) {
+            ProgramPickerSheet(selection: $selection, campus: campus)
+        }
+    }
+}
+
+private struct ProgramPickerSheet: View {
+    @Binding var selection: String
+    let campus: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var sections: [ProgramSection] {
+        UofTPrograms.filtered(UofTPrograms.sections(for: campus), query: query)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(sections) { section in
+                    Section(section.title) {
+                        ForEach(section.programs, id: \.self) { program in
+                            Button {
+                                selection = program
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(program)
+                                        .foregroundStyle(AppTheme.primaryText)
+
+                                    Spacer(minLength: 8)
+
+                                    if selection == program {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(AppTheme.blue)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .overlay {
+                if sections.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search programs")
+            .navigationTitle("Your program")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
             }
         }
+        .presentationDetents([.large])
     }
 }
 
@@ -1664,7 +1682,7 @@ private struct LiveActivityPauseControl: View {
                     .font(.system(size: 18, weight: .semibold, design: .default))
                     .foregroundStyle(isPaused ? AppTheme.secondaryText : AppTheme.blue)
                     .frame(width: 34, height: 34)
-                    .background(.white.opacity(0.76), in: Circle())
+                    .background(AppTheme.card.opacity(0.76), in: Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isPaused ? "Live Activities Paused" : "Live Activities On")
@@ -1680,13 +1698,13 @@ private struct LiveActivityPauseControl: View {
 
                 Spacer(minLength: 0)
 
-                LiveActivitySwitch(isOn: isPaused)
+                LiveActivitySwitch(isOn: !isPaused)
             }
             .padding(12)
             .background(
                 LinearGradient(
                     colors: [
-                        .white.opacity(0.92),
+                        AppTheme.card.opacity(0.92),
                         AppTheme.sky.opacity(isPaused ? 0.28 : 0.54)
                     ],
                     startPoint: .topLeading,
@@ -1709,14 +1727,14 @@ private struct LiveActivitySwitch: View {
 
     var body: some View {
         Capsule()
-            .fill(isOn ? AppTheme.blue : Color(red: 0.70, green: 0.75, blue: 0.78))
+            .fill(isOn ? AppTheme.blue : AppTheme.switchOff)
             .frame(width: 52, height: 32)
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()
                     .fill(.white)
                     .frame(width: 28, height: 28)
                     .padding(2)
-                    .shadow(color: AppTheme.navy.opacity(0.12), radius: 3, y: 1)
+                    .shadow(color: AppTheme.shadow.opacity(0.12), radius: 3, y: 1)
             }
             .animation(.spring(response: 0.24, dampingFraction: 0.9), value: isOn)
             .accessibilityHidden(true)
@@ -1768,6 +1786,32 @@ private struct AlertStatusCard: View {
     let leadMinutes: Int
     let alertCueMinutes: Int
     let isPaused: Bool
+    let backendStatus: String
+    let deviceStatus: String
+    let retryAction: () -> Void
+
+    private var hasFailed: Bool {
+        backendStatus.localizedCaseInsensitiveContains("failed")
+            || deviceStatus.localizedCaseInsensitiveContains("failed")
+    }
+
+    private var isReady: Bool {
+        backendStatus == "Schedule synced" && deviceStatus == "Connected"
+    }
+
+    private var automaticUpdates: (systemImage: String, title: String, detail: String, tint: Color) {
+        if isPaused {
+            return ("pause.circle.fill", "Automatic updates off", "Resume Live Activities to let UTime update while it's closed.", AppTheme.secondaryText)
+        }
+        if hasFailed {
+            return ("exclamationmark.triangle.fill", "Automatic updates unavailable", "UTime couldn't reach the server. Check your connection and retry.", AppTheme.red)
+        }
+        if isReady {
+            return ("checkmark.circle.fill", "Automatic updates ready", "Your schedule is synced, so class activities can start while UTime is closed. Delivery still depends on iOS and your connection.", AppTheme.blue)
+        }
+        let detail = deviceStatus == "Connected" ? "Syncing your schedule…" : "Waiting for this iPhone to register…"
+        return ("arrow.triangle.2.circlepath", "Setting up automatic updates", detail, AppTheme.secondaryText)
+    }
 
     var body: some View {
         ActionPanel(title: "Alert Status", subtitle: isPaused ? "Paused until you resume it" : "Ready for your saved classes") {
@@ -1785,6 +1829,21 @@ private struct AlertStatusCard: View {
                     detail: "Turns red \(alertCueMinutes) min before class, after the \(leadMinutes) min island start.",
                     tint: AppTheme.red
                 )
+
+                StatusRow(
+                    systemImage: automaticUpdates.systemImage,
+                    title: automaticUpdates.title,
+                    detail: automaticUpdates.detail,
+                    tint: automaticUpdates.tint
+                )
+
+                if !isPaused && !isReady {
+                    SecondaryActionButton(
+                        title: "Retry connection",
+                        systemImage: "arrow.clockwise",
+                        action: retryAction
+                    )
+                }
             }
         }
     }
@@ -1876,17 +1935,23 @@ private struct ProfileSummaryCard: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            ActionPanel(title: profileTitle, subtitle: "Your local UTime profile") {
-                VStack(spacing: 10) {
-                    ProfileInfoRow(systemImage: "building.columns.fill", title: "Campus", value: campus)
+            ProfileHeroCard(name: trimmedName, campus: campus, year: year)
+
+            ActionPanel(title: "Your details", subtitle: "Stored on this iPhone only") {
+                VStack(spacing: 0) {
                     ProfileInfoRow(systemImage: "graduationcap.fill", title: "Program", value: major)
+                    ProfileRowDivider()
+                    ProfileInfoRow(systemImage: "building.columns.fill", title: "Campus", value: campus)
+                    ProfileRowDivider()
                     ProfileInfoRow(systemImage: "person.text.rectangle.fill", title: "Year", value: year)
+                    ProfileRowDivider()
                     ProfileInfoRow(systemImage: "calendar", title: "Scheduled", value: "\(importedCount) class\(importedCount == 1 ? "" : "es")")
-                    ReviewPromptRow(action: { openURL(appStoreReviewURL) })
                 }
             }
 
-            SecondaryActionButton(
+            ReviewPromptRow(action: { openURL(appStoreReviewURL) })
+
+            PrimaryActionButton(
                 title: "Edit Profile",
                 systemImage: "pencil",
                 action: editAction
@@ -1894,9 +1959,81 @@ private struct ProfileSummaryCard: View {
         }
     }
 
-    private var profileTitle: String {
-        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedName.isEmpty ? "Profile" : trimmedName
+    private var trimmedName: String {
+        displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private struct ProfileHeroCard: View {
+    let name: String
+    let campus: String
+    let year: String
+
+    var body: some View {
+        VStack(spacing: 14) {
+            avatar
+
+            VStack(spacing: 5) {
+                Text(name.isEmpty ? "Your profile" : name)
+                    .font(OnboardingFont.semibold(28))
+                    .foregroundStyle(AppTheme.navy)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(OnboardingFont.medium(15))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 26)
+        .frame(maxWidth: .infinity)
+        .background { HeroCardBackground() }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var avatar: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.10, green: 0.50, blue: 0.88), Color(red: 0.0, green: 0.26, blue: 0.56)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            if let initial = name.first {
+                Text(String(initial).uppercased())
+                    .font(OnboardingFont.semibold(34))
+                    .foregroundStyle(.white)
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 30, weight: .semibold, design: .default))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: 78, height: 78)
+        .overlay {
+            Circle().stroke(AppTheme.highlight.opacity(0.9), lineWidth: 2)
+        }
+        .shadow(color: AppTheme.shadow.opacity(0.16), radius: 16, y: 8)
+        .accessibilityHidden(true)
+    }
+
+    private var subtitle: String {
+        [campus, year].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}
+
+private struct ProfileRowDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(AppTheme.border.opacity(0.7))
+            .frame(height: 1)
+            .padding(.leading, 42)
     }
 }
 
@@ -1905,16 +2042,16 @@ private struct ReviewPromptRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: "star")
+            HStack(spacing: 12) {
+                Image(systemName: "star.fill")
                     .font(.system(size: 14, weight: .semibold, design: .default))
                     .foregroundStyle(AppTheme.blue)
-                    .frame(width: 28, height: 28)
-                    .background(AppTheme.blue.opacity(0.09), in: Circle())
+                    .frame(width: 30, height: 30)
+                    .background(AppTheme.blue.opacity(0.10), in: Circle())
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Rate UTime")
-                        .font(OnboardingFont.semibold(13))
+                        .font(OnboardingFont.semibold(14))
                         .foregroundStyle(AppTheme.primaryText)
 
                     Text("Leave a quick App Store review")
@@ -1930,10 +2067,14 @@ private struct ReviewPromptRow: View {
                     .font(.system(size: 12, weight: .semibold, design: .default))
                     .foregroundStyle(AppTheme.secondaryText.opacity(0.65))
             }
-            .padding(.horizontal, 12)
-            .frame(height: 50)
-            .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.horizontal, 17)
+            .frame(height: 62)
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(PressableButtonStyle())
         .accessibilityLabel("Rate UTime on the App Store")
@@ -1946,28 +2087,28 @@ private struct ProfileInfoRow: View {
     let value: String
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold, design: .default))
                 .foregroundStyle(AppTheme.blue)
-                .frame(width: 28, height: 28)
-                .background(AppTheme.blue.opacity(0.09), in: Circle())
+                .frame(width: 30, height: 30)
+                .background(AppTheme.blue.opacity(0.10), in: Circle())
 
             Text(title)
-                .font(OnboardingFont.medium(13))
+                .font(OnboardingFont.medium(14))
                 .foregroundStyle(AppTheme.secondaryText)
 
-            Spacer(minLength: 10)
+            Spacer(minLength: 12)
 
             Text(value.isEmpty ? "Not set" : value)
-                .font(OnboardingFont.semibold(13))
+                .font(OnboardingFont.semibold(14))
                 .foregroundStyle(AppTheme.primaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 12)
-        .frame(height: 46)
-        .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.vertical, 10)
+        .frame(minHeight: 52)
     }
 }
 
@@ -2245,7 +2386,7 @@ private struct FloatingStatusToast: View {
         .padding(.vertical, 12)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.white)
+                .fill(AppTheme.card)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -2260,7 +2401,7 @@ private struct FloatingStatusToast: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                 )
         }
-        .shadow(color: AppTheme.navy.opacity(0.12), radius: 18, y: 12)
+        .shadow(color: AppTheme.shadow.opacity(0.12), radius: 18, y: 12)
     }
 }
 
@@ -2347,19 +2488,34 @@ private struct DestructiveActionButton: View {
     }
 }
 
+private extension Color {
+    init(light: (Double, Double, Double), dark: (Double, Double, Double), darkAlpha: Double = 1) {
+        self.init(uiColor: UIColor { traits in
+            if traits.userInterfaceStyle == .dark {
+                return UIColor(red: dark.0, green: dark.1, blue: dark.2, alpha: darkAlpha)
+            }
+            return UIColor(red: light.0, green: light.1, blue: light.2, alpha: 1)
+        })
+    }
+}
+
 private enum AppTheme {
-    static let navy = Color(red: 0.0, green: 0.16, blue: 0.36)
-    static let deepNavy = Color(red: 0.0, green: 0.09, blue: 0.20)
-    static let blue = Color(red: 0.0, green: 0.42, blue: 0.78)
-    static let red = Color(red: 0.78, green: 0.16, blue: 0.16)
-    static let cream = Color(red: 0.995, green: 0.985, blue: 0.955)
-    static let sky = Color(red: 0.84, green: 0.94, blue: 0.99)
-    static let background = Color(red: 0.975, green: 0.985, blue: 0.995)
-    static let surface = Color.white
-    static let field = Color(red: 0.955, green: 0.972, blue: 0.99)
-    static let border = Color(red: 0.84, green: 0.89, blue: 0.945)
-    static let primaryText = Color(red: 0.10, green: 0.13, blue: 0.18)
-    static let secondaryText = Color(red: 0.45, green: 0.50, blue: 0.58)
+    static let navy = Color(light: (0.0, 0.16, 0.36), dark: (0.80, 0.89, 1.0))
+    static let deepNavy = Color(light: (0.0, 0.09, 0.20), dark: (0.88, 0.94, 1.0))
+    static let blue = Color(light: (0.0, 0.42, 0.78), dark: (0.10, 0.50, 0.88))
+    static let red = Color(light: (0.78, 0.16, 0.16), dark: (0.88, 0.28, 0.28))
+    static let cream = Color(light: (0.995, 0.985, 0.955), dark: (0.07, 0.09, 0.13))
+    static let sky = Color(light: (0.84, 0.94, 0.99), dark: (0.08, 0.17, 0.28))
+    static let background = Color(light: (0.975, 0.985, 0.995), dark: (0.04, 0.06, 0.10))
+    static let surface = Color(light: (1.0, 1.0, 1.0), dark: (0.12, 0.15, 0.20))
+    static let card = Color(light: (1.0, 1.0, 1.0), dark: (0.11, 0.14, 0.19))
+    static let highlight = Color(light: (1.0, 1.0, 1.0), dark: (1.0, 1.0, 1.0), darkAlpha: 0.12)
+    static let shadow = Color(light: (0.0, 0.16, 0.36), dark: (0.0, 0.0, 0.0))
+    static let switchOff = Color(light: (0.70, 0.75, 0.78), dark: (0.30, 0.34, 0.40))
+    static let field = Color(light: (0.955, 0.972, 0.99), dark: (0.10, 0.13, 0.18))
+    static let border = Color(light: (0.84, 0.89, 0.945), dark: (0.20, 0.26, 0.34))
+    static let primaryText = Color(light: (0.10, 0.13, 0.18), dark: (0.94, 0.96, 0.98))
+    static let secondaryText = Color(light: (0.45, 0.50, 0.58), dark: (0.62, 0.68, 0.76))
 }
 
 #Preview {

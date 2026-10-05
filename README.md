@@ -38,6 +38,19 @@ The app is organized around a bottom navigation bar with four focused sections:
 - **Alerts** controls when Live Activities appear and when urgent cues should start.
 - **Profile** keeps local student context and app actions in one quiet place.
 
+## v2.4 Highlights
+
+Version `2.4` adds UofT-specific sign-up options, dark mode, a cleaner Profile, and a tidier island and Alerts screen.
+
+- **UofT programs at sign-up:** The “What are you studying?” step opens a searchable picker covering Rotman Commerce specialists, Engineering divisions, Arts & Science, professional faculties, graduate programs, and UTM and UTSC programs. It lists the programs for the campus you chose, plus “Undeclared / Exploring” and “Other”.
+- **Dark mode:** The whole app follows the system appearance, including sign-up, Schedule, Alerts, and Profile.
+- **Uploading replaces your schedule:** Uploading a timetable image now replaces your existing classes instead of doubling them. Any running Live Activity from the old schedule ends, and reminders and sync restart from the new classes. Manual **Add a course** still adds to your schedule.
+- **Cleaner Alerts:** The Automatic Live Activities debug panel is gone. A single status row in **Alert Status** shows whether automatic updates are ready, setting up, unavailable, or off, with a **Retry connection** button when needed. The Live Activities switch also now shows on when updates are on.
+- **Tighter compact Dynamic Island:** The course code sits flush against the camera cutout in a narrower box, leaving more room for status icons.
+- **Redesigned Profile:** An avatar hero card, one grouped details card, a standalone **Rate UTime** card, and a primary **Edit Profile** button, matching the Today header.
+
+PNG import and manual entry remain available; ICS import remains removed.
+
 ## v2.3 Highlights
 
 Version `2.3` improves timetable image recognition and makes the upload flow easier to complete.
@@ -49,19 +62,6 @@ Version `2.3` improves timetable image recognition and makes the upload flow eas
 - **Simpler upload:** One confirmation covers the reviewed scan. **Upload timetable** saves directly, while **Preview class dates (optional)** lets you remove holidays first. Missing required details show an explanation when you tap Upload.
 - **Easier-to-tap buttons:** **Upload timetable** and **Add a course** respond across their full visible button area, including the sides, without making the surrounding card tappable.
 
-PNG import and manual entry remain available. New classes are added alongside existing schedules; ICS import remains removed.
-
-## Screenshots
-
-The images below and above show earlier app screens; the v2.3 timetable-entry screens are not pictured yet.
-
-<p align="center">
-  <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">
-  <img src="docs/readme/dynamic-island.png" alt="UTime Dynamic Island compact class update" width="45%">
-</p>
-
-UTime is designed around native iPhone surfaces instead of becoming another heavy calendar screen. The app keeps the main interface calm, then uses Lock Screen and Dynamic Island surfaces when timing matters.
-
 ## Core Features
 
 ### Today
@@ -70,7 +70,7 @@ The **Today** section is the main landing view. It highlights the next class wit
 
 ### Schedule
 
-The **Schedule** section lets you add courses manually, with term dates and weekly lecture, tutorial, lab, or seminar meetings. Review generated class dates and swipe to exclude holidays before saving. New courses are appended to the existing schedule. Use **Upload timetable** to scan an ACORN PNG from Files or Photos. Recognition runs on-device, and all extracted courses can be edited before saving.
+The **Schedule** section lets you add courses manually, with term dates and weekly lecture, tutorial, lab, or seminar meetings. Review generated class dates and swipe to exclude holidays before saving. New courses are appended to the existing schedule. Use **Upload timetable** to scan an ACORN PNG from Files or Photos; saving it replaces your current schedule. Recognition runs on-device, and all extracted courses can be edited before saving.
 
 ### Alerts
 
@@ -78,14 +78,14 @@ The **Alerts** section controls how early UTime starts Live Activity updates bef
 
 ### Profile
 
-The **Profile** section stores local student details such as campus, program, year, and scheduled class count. It also includes a small **Rate UTime** row for users who want to leave an App Store review, without turning the page into a promotion screen.
+The **Profile** section shows your name and campus in a hero card, with program, campus, year, and scheduled class count in one details card. It also includes a small **Rate UTime** row for users who want to leave an App Store review, without turning the page into a promotion screen.
 
 ## Live Activities
 
 UTime uses native iOS Live Activities to keep the next class visible when it matters most:
 
 - **Lock Screen** updates show the course, room or delivery mode, countdown, and start time.
-- **Dynamic Island** keeps the compact view focused on the course and room.
+- **Dynamic Island** keeps the compact view focused on the course and room, with the course code tucked against the camera cutout.
 - **Alert timing** can be adjusted so updates appear before class instead of at the last second.
 - **Red-alert cues** help make the final minutes before class easier to notice.
 
@@ -95,7 +95,7 @@ The goal is not to mirror the whole schedule on the Lock Screen. UTime only surf
 
 Manual entry uses Toronto time and expands weekly meetings across the selected term, preserving local class times across daylight-saving changes. Set in-person locations or mark a meeting as online. Review class dates before saving; holidays and reading week are not excluded automatically. Saved occurrences can be deleted individually from Schedule.
 
-ICS import has been removed. Existing saved schedules remain available. PNG import reads the full Course / Day / Time / Location table beneath the grid. Grid-only screenshots are not supported. The review includes the original image and requires confirmation of meetings and exact term dates. The importer rescans the table separately from browser controls and matches course labels to the grid’s chronological hour sequence. Unmarked AM/PM still requires confirmation. Missing or unreadable fields stay in the editable draft with review flags instead of rejecting the entire schedule; unresolved times show explicitly labeled placeholders. One “I checked all meetings and term dates” confirmation covers the reviewed scan; missing days, course codes, and invalid times must still be corrected. Lecture section numbers are optional. The image does not provide holidays or the winter schedule of a year-long course.
+ICS import has been removed. Existing saved schedules remain available. Uploading a PNG replaces the current schedule. PNG import reads the full Course / Day / Time / Location table beneath the grid. Grid-only screenshots are not supported. The review includes the original image and requires confirmation of meetings and exact term dates. The importer rescans the table separately from browser controls and matches course labels to the grid’s chronological hour sequence. Unmarked AM/PM still requires confirmation. Missing or unreadable fields stay in the editable draft with review flags instead of rejecting the entire schedule; unresolved times show explicitly labeled placeholders. One “I checked all meetings and term dates” confirmation covers the reviewed scan; missing days, course codes, and invalid times must still be corrected. Lecture section numbers are optional. The image does not provide holidays or the winter schedule of a year-long course.
 
 ## Privacy and Data
 
@@ -148,6 +148,7 @@ For Live Activities, use a device or simulator/runtime that supports ActivityKit
 4. Compare the extracted courses with the original PNG, correct any details, and set the exact term dates. Correct any flagged meeting details, including AM/PM, before confirming the scan.
 5. Turn on **I checked all meetings and term dates**, then tap **Upload timetable** to save.
 6. To exclude holidays, reading week, or cancelled classes first, open **Preview class dates (optional)**, swipe left on dates, and tap **Upload timetable**.
+7. Uploading replaces your existing schedule, so re-uploading never doubles your classes.
 
 ### Enter courses manually
 
@@ -162,7 +163,7 @@ Open **Alerts** to set Live Activity timing after saving your timetable.
 
 Supabase checks due classes every minute and sends ActivityKit pushes through APNs. Schedule uploads are atomic and retain delivery progress on retries. Failed devices are isolated so they do not stop the batch.
 
-The app retries temporary connection failures and resyncs when opened. In **Alerts → Automatic Live Activities**, check for **Schedule synced** and **Device registration: Connected**, or tap **Retry connection**.
+The app retries temporary connection failures and resyncs when opened. In **Alerts → Alert Status**, look for **Automatic updates ready**, or tap **Retry connection** if it shows setting up or unavailable.
 
 After installing an updated build on your iPhone, open it online once to sync. Test a class with the app in the background and the phone locked, checking its start, countdown cue, and end. A successful sync or APNs response does not prove that iOS displayed the activity.
 

@@ -345,7 +345,7 @@ private struct CompactCountdownLeadingView: View {
             let showCountdown = timeline.date < state.startTime
                 && (isStale || state.shouldShowCompactCountdown(now: timeline.date))
 
-            ZStack(alignment: .leading) {
+            ZStack(alignment: .trailing) {
                 if showCountdown {
                     compactTimer(now: timeline.date)
                         .transition(.compactCue)
@@ -354,17 +354,17 @@ private struct CompactCountdownLeadingView: View {
                         .transition(.compactCue)
                 }
             }
-            .frame(width: 56, height: 18, alignment: .leading)
-            .offset(x: 3)
+            .frame(width: 50, height: 18, alignment: .trailing)
             .animation(.spring(response: 0.42, dampingFraction: 0.82), value: showCountdown)
         }
     }
 
     private var compactCourse: some View {
         Text(state.compactCourseCode)
-            .font(.system(size: 13, weight: .semibold, design: .default))
+            .font(.system(size: 12.5, weight: .semibold, design: .default))
             .foregroundStyle(ActivityStyle.primary)
             .lineLimit(1)
+            .minimumScaleFactor(0.8)
     }
 
     private func compactTimer(now: Date) -> some View {

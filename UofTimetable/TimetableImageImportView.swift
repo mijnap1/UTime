@@ -22,6 +22,8 @@ struct TimetableImageImportView: View {
                     Text("Choose a clear ACORN screenshot or PNG with the entire grid, hour labels, and Course / Day / Time / Location table. Safari bars are okay. Lecture section numbers are optional.")
                     Text("Text recognition happens on your device. You'll check the extracted meetings and set term dates before anything is saved.")
                         .foregroundStyle(.secondary)
+                    Text("Importing replaces your current schedule.")
+                        .fontWeight(.semibold)
                 }
                 Section {
                     PhotosPicker(selection: $photo, matching: .images) {

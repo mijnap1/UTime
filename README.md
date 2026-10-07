@@ -38,22 +38,22 @@ The app is organized around a bottom navigation bar with four focused sections:
 - **Alerts** controls when Live Activities appear and when urgent cues should start.
 - **Profile** keeps local student context and app actions in one quiet place.
 
-## v2.4 Highlights
+## v3.1 Highlights
 
-Version `2.4` adds UofT-specific sign-up options, dark mode, a cleaner Profile, and a tidier island and Alerts screen.
+Version `3.1` redesigns the Schedule and Alerts tabs to match the Today and Profile headers, polishes light mode, and adds in-app update prompts.
 
-- **UofT programs at sign-up:** The “What are you studying?” step opens a searchable picker covering Rotman Commerce specialists, Engineering divisions, Arts & Science, professional faculties, graduate programs, and UTM and UTSC programs. It lists the programs for the campus you chose, plus “Undeclared / Exploring” and “Other”.
-- **Dark mode:** The whole app follows the system appearance, including sign-up, Schedule, Alerts, and Profile.
-- **Uploading replaces your schedule:** Uploading a timetable image now replaces your existing classes instead of doubling them. Any running Live Activity from the old schedule ends, and reminders and sync restart from the new classes. Manual **Add a course** still adds to your schedule.
-- **Cleaner Alerts:** The Automatic Live Activities debug panel is gone. A single status row in **Alert Status** shows whether automatic updates are ready, setting up, unavailable, or off, with a **Retry connection** button when needed. The Live Activities switch also now shows on when updates are on.
-- **Tighter compact Dynamic Island:** The course code sits flush against the camera cutout in a narrower box, leaving more room for status icons.
-- **Redesigned Profile:** An avatar hero card, one grouped details card, a standalone **Rate UTime** card, and a primary **Edit Profile** button, matching the Today header.
+- **Redesigned Schedule:** A header card shows today’s date, a strip of the next seven days with a dot for each class, and counts for today, this week, and upcoming. **Add a course** and **Upload timetable** sit side by side as two tiles.
+- **Classes grouped by day:** Upcoming classes are listed under **Today**, **Tomorrow**, and dated headings. Each row shows the start and end time, a color-coded tag for lectures, tutorials, labs, and seminars, and the room or delivery mode.
+- **Redesigned Alerts:** A header card previews the Live Activity for your next class and shows a timeline of when the island appears, when the red cue starts, and when class begins. The timing controls and **Alert Status** are grouped into cleaner panels.
+- **Quick add on Today:** With no classes saved, the **Next Class** card offers the same **Add a course** and **Upload timetable** tiles as Schedule.
+- **Light mode polish:** Blue accents are lighter in light mode, and the Live Activity preview uses a light card instead of solid black. Dark mode keeps its deeper blues and black island.
+- **Update prompts:** When a newer UTime version is on the App Store, the app offers to open it. Choosing **Later** hides the prompt for 24 hours.
 
 PNG import and manual entry remain available; ICS import remains removed.
 
 ## Screenshots
 
-The images below and above show earlier app screens; the v2.4 screens are not pictured yet.
+The images below and above show earlier app screens; the v3.1 screens are not pictured yet.
 
 <p align="center">
   <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">
@@ -66,15 +66,15 @@ UTime is designed around native iPhone surfaces instead of becoming another heav
 
 ### Today
 
-The **Today** section is the main landing view. It highlights the next class with the course code, section details, start time, date, and room when one is available. Below that, the overview panel keeps the day readable with counts for classes today, upcoming classes, alert timing, and Dynamic Island status.
+The **Today** section is the main landing view. It highlights the next class with the course code, section details, start time, date, and room when one is available. Below that, the overview panel keeps the day readable with counts for classes today, upcoming classes, alert timing, and Dynamic Island status. With no classes saved, the **Next Class** card shows the **Add a course** and **Upload timetable** tiles instead.
 
 ### Schedule
 
-The **Schedule** section lets you add courses manually, with term dates and weekly lecture, tutorial, lab, or seminar meetings. Review generated class dates and swipe to exclude holidays before saving. New courses are appended to the existing schedule. Use **Upload timetable** to scan an ACORN PNG from Files or Photos; saving it replaces your current schedule. Recognition runs on-device, and all extracted courses can be edited before saving.
+The **Schedule** section opens with a seven-day strip and class counts, then lists upcoming classes grouped by day. Swipe left on a class to delete it. You can add courses manually, with term dates and weekly lecture, tutorial, lab, or seminar meetings. Review generated class dates and swipe to exclude holidays before saving. New courses are appended to the existing schedule. Use **Upload timetable** to scan an ACORN PNG from Files or Photos; saving it replaces your current schedule. Recognition runs on-device, and all extracted courses can be edited before saving.
 
 ### Alerts
 
-The **Alerts** section controls how early UTime starts Live Activity updates before class. It also lets users choose a red-alert cue, so the app can become more noticeable as the start time gets closer.
+The **Alerts** section controls how early UTime starts Live Activity updates before class. It also lets users choose a red-alert cue, so the app can become more noticeable as the start time gets closer. A preview at the top shows how the Live Activity will look for your next class, with a timeline of when the island appears and when the red cue starts.
 
 ### Profile
 

@@ -12,6 +12,9 @@ private let appStoreReviewURL = URL(string: "https://apps.apple.com/app/id680120
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @AppStorage("dismissedUpdateVersion") private var dismissedUpdateVersion = ""
+    @AppStorage("dismissedUpdateAt") private var dismissedUpdateAt = 0.0
     @AppStorage("backendSyncStatus") private var backendSyncStatus = "Not synced yet"
     @AppStorage("pushStartSyncStatus") private var pushStartSyncStatus = "Waiting for device registration"
     @Environment(\.modelContext) private var modelContext
@@ -32,6 +35,7 @@ struct ContentView: View {
     @State private var toastTask: Task<Void, Never>?
     @State private var islandTask: Task<Void, Never>?
     @State private var selectedHomeSection = HomeSection.today
+    @State private var pendingUpdate: AppUpdate?
 
     var body: some View {
         Group {
@@ -104,6 +108,19 @@ struct ContentView: View {
             guard scenePhase == .active else { return }
             syncSchedule()
             await PushToStartTokenManager.shared.retryRegistrations()
+            await checkForAppUpdate()
+        }
+        .alert("Update available", isPresented: Binding(
+            get: { pendingUpdate != nil },
+            set: { if !$0 { pendingUpdate = nil } }
+        ), presenting: pendingUpdate) { update in
+            Button("Update") { openURL(update.storeURL) }
+            Button("Later", role: .cancel) {
+                dismissedUpdateVersion = update.version
+                dismissedUpdateAt = Date().timeIntervalSince1970
+            }
+        } message: { update in
+            Text("UTime \(update.version) is on the App Store. Update to get the latest fixes and keep your Live Activities working.")
         }
         .onChange(of: reminderLeadMinutes) { _, newValue in
             reminderLeadMinutes = min(max(newValue, 1), 60)
@@ -116,6 +133,17 @@ struct ContentView: View {
         .onChange(of: isLiveActivityPaused) { _, _ in
             applyReminderSettings()
         }
+    }
+
+    private func checkForAppUpdate() async {
+        guard hasCompletedProfileSetup, !isShowingProfileSetup, pendingUpdate == nil,
+              let update = await AppUpdateChecker.availableUpdate() else { return }
+
+        let recentlyDismissed = dismissedUpdateVersion == update.version
+            && Date().timeIntervalSince1970 - dismissedUpdateAt < 24 * 60 * 60
+        guard !recentlyDismissed else { return }
+
+        pendingUpdate = update
     }
 
     private var upcomingEvents: [CourseEvent] {
@@ -138,7 +166,10 @@ struct ContentView: View {
             if let nextEvent = upcomingEvents.first {
                 NextClassCard(event: nextEvent)
             } else {
-                EmptyNextClassCard(importAction: { isAddingCourse = true })
+                EmptyNextClassCard(
+                    importAction: { isAddingCourse = true },
+                    imageAction: { isImportingImage = true }
+                )
             }
 
             DaySnapshotCard(
@@ -148,6 +179,8 @@ struct ContentView: View {
                 isPaused: isLiveActivityPaused
             )
         case .schedule:
+            ScheduleHeroCard(events: upcomingEvents)
+
             AddScheduleCard(
                 importAction: { isAddingCourse = true },
                 imageAction: { isImportingImage = true }
@@ -159,6 +192,13 @@ struct ContentView: View {
                 clearAction: clearSchedule
             )
         case .alerts:
+            AlertsHeroCard(
+                nextEvent: upcomingEvents.first,
+                leadMinutes: reminderLeadMinutes,
+                alertCueMinutes: alertCueMinutes,
+                isPaused: isLiveActivityPaused
+            )
+
             ReminderSettingsCard(
                 leadMinutes: $reminderLeadMinutes,
                 alertCueMinutes: $alertCueMinutes,
@@ -610,7 +650,7 @@ private struct AppHeaderView: View {
 
 private struct HeroCardBackground: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [
@@ -645,10 +685,10 @@ private struct HeroCardBackground: View {
                         endPoint: .bottom
                     )
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(AppTheme.border.opacity(0.8), lineWidth: 1)
             }
     }
@@ -1437,36 +1477,11 @@ private struct NextClassCard: View {
 
 private struct EmptyNextClassCard: View {
     let importAction: () -> Void
+    let imageAction: () -> Void
 
     var body: some View {
-        ActionPanel(title: "Next Class", subtitle: "Nothing upcoming yet") {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: "calendar.badge.plus")
-                        .font(.system(size: 18, weight: .semibold, design: .default))
-                        .foregroundStyle(AppTheme.blue)
-                        .frame(width: 36, height: 36)
-                        .background(AppTheme.blue.opacity(0.10), in: Circle())
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Add your timetable")
-                            .font(OnboardingFont.semibold(15))
-                            .foregroundStyle(AppTheme.primaryText)
-
-                        Text("Your next room appears here.")
-                            .font(OnboardingFont.regular(13))
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-
-                    Spacer(minLength: 0)
-                }
-
-                PrimaryActionButton(
-                    title: "Add a course",
-                    systemImage: "square.and.arrow.down",
-                    action: importAction
-                )
-            }
+        ActionPanel(title: "Next Class", subtitle: "Add your timetable and your next room appears here") {
+            AddScheduleCard(importAction: importAction, imageAction: imageAction)
         }
     }
 }
@@ -1529,49 +1544,247 @@ private struct SnapshotMetricPill: View {
     }
 }
 
+private struct HeroIconBadge: View {
+    let systemImage: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 20, weight: .semibold, design: .default))
+            .foregroundStyle(.white)
+            .contentTransition(.symbolEffect(.replace))
+            .frame(width: 50, height: 50)
+            .background(AppTheme.brandGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(AppTheme.highlight.opacity(0.5), lineWidth: 1)
+            }
+            .shadow(color: AppTheme.blue.opacity(0.22), radius: 12, y: 6)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct HeroInsetPanel<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .background(AppTheme.card.opacity(0.66), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(AppTheme.border.opacity(0.7), lineWidth: 1)
+            }
+    }
+}
+
+private struct ScheduleHeroCard: View {
+    let events: [CourseEvent]
+
+    private var calendar: Calendar { .current }
+
+    private var nextSevenDays: [Date] {
+        let today = calendar.startOfDay(for: Date())
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 13) {
+                HeroIconBadge(systemImage: "calendar")
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Schedule")
+                        .font(OnboardingFont.semibold(27))
+                        .foregroundStyle(AppTheme.navy)
+
+                    Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                        .font(OnboardingFont.medium(14))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 6) {
+                ForEach(nextSevenDays, id: \.self) { day in
+                    WeekDayChip(
+                        date: day,
+                        classCount: classCount(on: day),
+                        isToday: calendar.isDateInToday(day)
+                    )
+                }
+            }
+
+            HeroInsetPanel {
+                HStack(spacing: 0) {
+                    HeroStat(value: classCount(on: Date()), label: "Today")
+                    HeroStatDivider()
+                    HeroStat(value: nextSevenDays.reduce(0) { $0 + classCount(on: $1) }, label: "This week")
+                    HeroStatDivider()
+                    HeroStat(value: events.count, label: "Upcoming")
+                }
+                .padding(.vertical, 12)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .background { HeroCardBackground() }
+    }
+
+    private func classCount(on day: Date) -> Int {
+        events.filter { calendar.isDate($0.startTime, inSameDayAs: day) }.count
+    }
+}
+
+private struct WeekDayChip: View {
+    let date: Date
+    let classCount: Int
+    let isToday: Bool
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                .font(OnboardingFont.semibold(10))
+                .tracking(0.6)
+                .foregroundStyle(isToday ? .white.opacity(0.82) : AppTheme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text(date.formatted(.dateTime.day()))
+                .font(OnboardingFont.semibold(17).monospacedDigit())
+                .foregroundStyle(isToday ? .white : AppTheme.navy)
+
+            HStack(spacing: 3) {
+                ForEach(0..<min(classCount, 3), id: \.self) { _ in
+                    Circle()
+                        .fill(isToday ? .white : AppTheme.blue)
+                        .frame(width: 4, height: 4)
+                }
+            }
+            .frame(height: 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background {
+            if isToday {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(AppTheme.brandGradient)
+                    .shadow(color: AppTheme.blue.opacity(0.24), radius: 10, y: 5)
+            } else {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(AppTheme.card.opacity(0.66))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(AppTheme.border.opacity(0.7), lineWidth: 1)
+                    }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(date.formatted(.dateTime.weekday(.wide).month().day())), \(classCount) class\(classCount == 1 ? "" : "es")")
+    }
+}
+
+private struct HeroStat: View {
+    let value: Int
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(OnboardingFont.semibold(20).monospacedDigit())
+                .foregroundStyle(AppTheme.navy)
+                .contentTransition(.numericText())
+
+            Text(label)
+                .font(OnboardingFont.medium(12))
+                .foregroundStyle(AppTheme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HeroStatDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(AppTheme.border.opacity(0.8))
+            .frame(width: 1, height: 30)
+    }
+}
+
 private struct AddScheduleCard: View {
     let importAction: () -> Void
     let imageAction: () -> Void
 
     var body: some View {
-        ActionPanel(title: "Add your timetable", subtitle: "Build your schedule, one course at a time") {
-            VStack(alignment: .leading, spacing: 14) {
-                TutorialStep(systemImage: "keyboard", title: "Enter manually", text: "Add your courses, weekly meetings, and rooms. Review before saving.")
-                PrimaryActionButton(title: "Add a course", systemImage: "plus", action: importAction)
-                Divider()
-                TutorialStep(systemImage: "photo", title: "Upload a PNG", text: "Scan the table in your ACORN timetable and check the results.")
-                PrimaryActionButton(title: "Upload timetable", systemImage: "photo", action: imageAction)
-            }
+        HStack(spacing: 10) {
+            QuickActionTile(
+                systemImage: "plus",
+                title: "Add a course",
+                detail: "Enter meetings and rooms",
+                isProminent: true,
+                action: importAction
+            )
+
+            QuickActionTile(
+                systemImage: "photo.on.rectangle.angled",
+                title: "Upload timetable",
+                detail: "Scan an ACORN PNG",
+                isProminent: false,
+                action: imageAction
+            )
         }
     }
 }
 
-private struct TutorialStep: View {
+private struct QuickActionTile: View {
     let systemImage: String
     let title: String
-    let text: String
+    let detail: String
+    let isProminent: Bool
+    let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold, design: .default))
-                .foregroundStyle(AppTheme.blue)
-                .frame(width: 20, height: 20)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .semibold, design: .default))
+                    .foregroundStyle(isProminent ? .white : AppTheme.blue)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        isProminent ? Color.white.opacity(0.18) : AppTheme.blue.opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(OnboardingFont.semibold(13))
-                    .foregroundStyle(AppTheme.primaryText)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(OnboardingFont.semibold(15))
+                        .foregroundStyle(isProminent ? .white : AppTheme.navy)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
 
-                Text(text)
-                    .font(OnboardingFont.regular(13))
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(detail)
+                        .font(OnboardingFont.regular(12))
+                        .foregroundStyle(isProminent ? .white.opacity(0.78) : AppTheme.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
-
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isProminent ? AnyShapeStyle(AppTheme.mutedBrandGradient) : AnyShapeStyle(AppTheme.surface))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(isProminent ? Color.white.opacity(0.18) : AppTheme.border, lineWidth: 1)
+            }
+            .shadow(color: isProminent ? AppTheme.blue.opacity(0.12) : AppTheme.shadow.opacity(0.04), radius: 14, y: 8)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .padding(.vertical, 8)
+        .buttonStyle(PressableButtonStyle())
     }
 }
 
@@ -1584,52 +1797,46 @@ private struct ReminderSettingsCard: View {
     let rescheduleAction: () -> Void
 
     var body: some View {
-        ActionPanel(title: "Live Activity Settings", subtitle: "Choose when the lock screen and island appear") {
-            VStack(spacing: 14) {
+        ActionPanel(title: "Live Activity Settings", subtitle: "Choose when the Lock Screen and island appear") {
+            VStack(spacing: 12) {
                 LiveActivityPauseControl(isPaused: $isPaused)
 
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Before class")
-                        .font(OnboardingFont.medium(15))
-                        .foregroundStyle(AppTheme.primaryText)
+                VStack(spacing: 10) {
+                    SettingHeader(
+                        systemImage: "timer",
+                        title: "Island appears",
+                        value: leadMinutes,
+                        tint: AppTheme.blue
+                    )
 
-                    Spacer()
+                    Slider(
+                        value: Binding(
+                            get: { Double(leadMinutes) },
+                            set: { leadMinutes = min(max(Int($0.rounded()), 1), 60) }
+                        ),
+                        in: 1...60,
+                        step: 1
+                    )
+                    .tint(AppTheme.blue)
 
-                    Text("\(leadMinutes) min")
-                        .font(OnboardingFont.semibold(20).monospacedDigit())
-                        .foregroundStyle(AppTheme.navy)
-                }
-
-                Slider(
-                    value: Binding(
-                        get: { Double(leadMinutes) },
-                        set: { leadMinutes = min(max(Int($0.rounded()), 1), 60) }
-                    ),
-                    in: 1...60,
-                    step: 1
-                )
-                .tint(AppTheme.blue)
-
-                HStack {
-                    Text("1 min")
-                    Spacer()
-                    Text("60 min max")
-                }
-                .font(OnboardingFont.medium(12))
-                .foregroundStyle(AppTheme.secondaryText)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Red alert cue")
-                            .font(OnboardingFont.medium(15))
-                            .foregroundStyle(AppTheme.primaryText)
-
+                    HStack {
+                        Text("1 min")
                         Spacer()
-
-                        Text("\(alertCueMinutes) min")
-                            .font(OnboardingFont.semibold(15).monospacedDigit())
-                            .foregroundStyle(AppTheme.red)
+                        Text("60 min max")
                     }
+                    .font(OnboardingFont.medium(12))
+                    .foregroundStyle(AppTheme.secondaryText)
+                }
+                .padding(14)
+                .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingHeader(
+                        systemImage: "exclamationmark",
+                        title: "Red alert cue",
+                        value: alertCueMinutes,
+                        tint: AppTheme.red
+                    )
 
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                         ForEach(Self.alertOptions, id: \.self) { minutes in
@@ -1648,7 +1855,8 @@ private struct ReminderSettingsCard: View {
                         .font(OnboardingFont.regular(12))
                         .foregroundStyle(AppTheme.secondaryText)
                 }
-                .padding(.top, 2)
+                .padding(14)
+                .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 SecondaryActionButton(
                     title: isPaused ? "Resume Live Activity" : "Update Live Activity",
@@ -1665,6 +1873,269 @@ private struct ReminderSettingsCard: View {
                 )
             }
         }
+    }
+}
+
+private struct SettingHeader: View {
+    let systemImage: String
+    let title: String
+    let value: Int
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .bold, design: .default))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.12), in: Circle())
+
+            Text(title)
+                .font(OnboardingFont.semibold(15))
+                .foregroundStyle(AppTheme.primaryText)
+
+            Spacer()
+
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("\(value)")
+                    .font(OnboardingFont.semibold(24).monospacedDigit())
+                    .contentTransition(.numericText())
+
+                Text("min")
+                    .font(OnboardingFont.medium(13))
+            }
+            .foregroundStyle(tint)
+            .animation(.snappy, value: value)
+        }
+    }
+}
+
+private struct AlertsHeroCard: View {
+    let nextEvent: CourseEvent?
+    let leadMinutes: Int
+    let alertCueMinutes: Int
+    let isPaused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 13) {
+                HeroIconBadge(systemImage: isPaused ? "bell.slash.fill" : "bell.badge.fill")
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Alerts")
+                        .font(OnboardingFont.semibold(27))
+                        .foregroundStyle(AppTheme.navy)
+
+                    Text(isPaused ? "Live Activities are paused" : "Lock Screen and Dynamic Island")
+                        .font(OnboardingFont.medium(14))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            IslandPreview(event: nextEvent, alertCueMinutes: alertCueMinutes, isPaused: isPaused)
+
+            AlertTimeline(leadMinutes: leadMinutes, alertCueMinutes: alertCueMinutes, isPaused: isPaused)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .background { HeroCardBackground() }
+        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: isPaused)
+    }
+}
+
+private struct IslandPreview: View {
+    let event: CourseEvent?
+    let alertCueMinutes: Int
+    let isPaused: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isLight: Bool { colorScheme == .light }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image("UofTimetableLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 34, height: 34)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event?.courseCode ?? "Your next class")
+                    .font(OnboardingFont.semibold(16))
+                    .foregroundStyle(isLight ? AppTheme.navy : .white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Label(locationText, systemImage: locationIcon)
+                    .labelStyle(CompactLabelStyle())
+                    .font(OnboardingFont.medium(12))
+                    .foregroundStyle(isLight ? AppTheme.secondaryText : .white.opacity(0.6))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(alertCueMinutes):00")
+                    .font(OnboardingFont.semibold(18).monospacedDigit())
+                    .foregroundStyle(isLight ? AppTheme.red : AppTheme.islandRed)
+                    .contentTransition(.numericText())
+
+                Text(event.map { "Starts \($0.startTime.formatted(date: .omitted, time: .shortened))" } ?? "Red cue")
+                    .font(OnboardingFont.medium(11))
+                    .foregroundStyle(isLight ? AppTheme.secondaryText : .white.opacity(0.55))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 18)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 29, style: .continuous)
+                .fill(
+                    isLight
+                        ? AnyShapeStyle(LinearGradient(
+                            colors: [AppTheme.surface, AppTheme.sky.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        : AnyShapeStyle(Color.black)
+                )
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 29, style: .continuous)
+                .stroke(isLight ? AppTheme.border : .white.opacity(0.08), lineWidth: 1)
+        }
+        .shadow(color: AppTheme.shadow.opacity(isLight ? 0.08 : 0.22), radius: 16, y: 10)
+        .saturation(isPaused ? 0 : 1)
+        .opacity(isPaused ? 0.55 : 1)
+        .animation(.snappy, value: alertCueMinutes)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Live Activity preview for \(event?.courseCode ?? "your next class")")
+    }
+
+    private var locationIcon: String {
+        switch event?.deliveryMode.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "Asynchronous": return "clock.fill"
+        case "Online": return "wifi"
+        default: return "location.fill"
+        }
+    }
+
+    private var locationText: String {
+        guard let event else { return "Room appears here" }
+        let room = [event.building, event.roomNumber]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        if !room.isEmpty { return room }
+        return event.deliveryMode.isEmpty ? "No room" : event.deliveryMode
+    }
+}
+
+private struct CompactLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon.imageScale(.small)
+            configuration.title
+        }
+    }
+}
+
+private struct AlertTimeline: View {
+    let leadMinutes: Int
+    let alertCueMinutes: Int
+    let isPaused: Bool
+
+    private var cueFraction: CGFloat {
+        guard leadMinutes > 0 else { return 1 }
+        return 1 - CGFloat(min(alertCueMinutes, leadMinutes)) / CGFloat(leadMinutes)
+    }
+
+    var body: some View {
+        HeroInsetPanel {
+            VStack(spacing: 12) {
+                GeometryReader { proxy in
+                    let width = proxy.size.width
+                    let cueX = width * cueFraction
+
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(AppTheme.blue.opacity(0.85))
+                            .frame(width: max(cueX, 0), height: 5)
+
+                        Capsule()
+                            .fill(AppTheme.red.opacity(0.85))
+                            .frame(width: max(width - cueX, 0), height: 5)
+                            .offset(x: cueX)
+
+                        TimelineMarker(tint: AppTheme.blue)
+                            .offset(x: -8)
+
+                        TimelineMarker(tint: AppTheme.red)
+                            .offset(x: cueX - 8)
+
+                        TimelineMarker(tint: AppTheme.navy)
+                            .offset(x: width - 8)
+                    }
+                    .frame(height: 16)
+                }
+                .frame(height: 16)
+                .padding(.horizontal, 8)
+
+                HStack(alignment: .top) {
+                    TimelineLabel(title: "Island", detail: "\(leadMinutes) min before", tint: AppTheme.blue, alignment: .leading)
+                    Spacer(minLength: 4)
+                    TimelineLabel(title: "Red cue", detail: "\(alertCueMinutes) min before", tint: AppTheme.red, alignment: .center)
+                    Spacer(minLength: 4)
+                    TimelineLabel(title: "Class", detail: "Starts", tint: AppTheme.navy, alignment: .trailing)
+                }
+            }
+            .padding(14)
+        }
+        .saturation(isPaused ? 0 : 1)
+        .opacity(isPaused ? 0.6 : 1)
+        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: cueFraction)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Island appears \(leadMinutes) minutes before class. Red cue \(alertCueMinutes) minutes before class.")
+    }
+}
+
+private struct TimelineMarker: View {
+    let tint: Color
+
+    var body: some View {
+        Circle()
+            .fill(AppTheme.surface)
+            .frame(width: 16, height: 16)
+            .overlay { Circle().stroke(tint, lineWidth: 3.5) }
+            .shadow(color: tint.opacity(0.25), radius: 4, y: 2)
+    }
+}
+
+private struct TimelineLabel: View {
+    let title: String
+    let detail: String
+    let tint: Color
+    let alignment: HorizontalAlignment
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 1) {
+            Text(title)
+                .font(OnboardingFont.semibold(13))
+                .foregroundStyle(tint)
+
+            Text(detail)
+                .font(OnboardingFont.regular(11).monospacedDigit())
+                .foregroundStyle(AppTheme.secondaryText)
+                .contentTransition(.numericText())
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 }
 
@@ -1749,18 +2220,29 @@ private struct AlertCueButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text("\(minutes) min")
-                .font(OnboardingFont.semibold(13).monospacedDigit())
-                .frame(maxWidth: .infinity)
-                .frame(height: 36)
+            HStack(spacing: 4) {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold, design: .default))
+                        .transition(.scale.combined(with: .opacity))
+                }
+
+                Text("\(minutes) min")
+                    .font(OnboardingFont.semibold(13).monospacedDigit())
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
         .foregroundStyle(foregroundColor)
-        .background(backgroundColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(backgroundColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(borderColor, lineWidth: 1)
         }
+        .shadow(color: isSelected && isEnabled ? AppTheme.red.opacity(0.25) : .clear, radius: 8, y: 4)
+        .animation(.spring(response: 0.26, dampingFraction: 0.86), value: isSelected)
         .opacity(isEnabled ? 1 : 0.35)
         .disabled(!isEnabled)
     }
@@ -1771,8 +2253,8 @@ private struct AlertCueButton: View {
     }
 
     private var backgroundColor: Color {
-        if !isEnabled { return AppTheme.field }
-        return isSelected ? AppTheme.red : AppTheme.red.opacity(0.08)
+        if !isEnabled { return AppTheme.surface }
+        return isSelected ? AppTheme.red : AppTheme.surface
     }
 
     private var borderColor: Color {
@@ -1801,13 +2283,13 @@ private struct AlertStatusCard: View {
 
     private var automaticUpdates: (systemImage: String, title: String, detail: String, tint: Color) {
         if isPaused {
-            return ("pause.circle.fill", "Automatic updates off", "Resume Live Activities to let UTime update while it's closed.", AppTheme.secondaryText)
+            return ("pause.fill", "Automatic updates off", "Resume Live Activities to let UTime update while it's closed.", AppTheme.secondaryText)
         }
         if hasFailed {
             return ("exclamationmark.triangle.fill", "Automatic updates unavailable", "UTime couldn't reach the server. Check your connection and retry.", AppTheme.red)
         }
         if isReady {
-            return ("checkmark.circle.fill", "Automatic updates ready", "Your schedule is synced, so class activities can start while UTime is closed. Delivery still depends on iOS and your connection.", AppTheme.blue)
+            return ("checkmark", "Automatic updates ready", "Your schedule is synced, so class activities can start while UTime is closed. Delivery still depends on iOS and your connection.", AppTheme.blue)
         }
         let detail = deviceStatus == "Connected" ? "Syncing your schedule…" : "Waiting for this iPhone to register…"
         return ("arrow.triangle.2.circlepath", "Setting up automatic updates", detail, AppTheme.secondaryText)
@@ -1815,27 +2297,35 @@ private struct AlertStatusCard: View {
 
     var body: some View {
         ActionPanel(title: "Alert Status", subtitle: isPaused ? "Paused until you resume it" : "Ready for your saved classes") {
-            VStack(spacing: 10) {
-                StatusRow(
-                    systemImage: isPaused ? "pause.circle.fill" : "checkmark.circle.fill",
-                    title: isPaused ? "Live Activities paused" : "Live Activities active",
-                    detail: isPaused ? "Your schedule is saved, but island updates are off." : "\(upcomingCount) upcoming class\(upcomingCount == 1 ? "" : "es") can trigger updates.",
-                    tint: isPaused ? AppTheme.secondaryText : AppTheme.blue
-                )
+            VStack(spacing: 12) {
+                VStack(spacing: 0) {
+                    StatusRow(
+                        systemImage: isPaused ? "pause.fill" : "dot.radiowaves.left.and.right",
+                        title: isPaused ? "Live Activities paused" : "Live Activities active",
+                        detail: isPaused ? "Your schedule is saved, but island updates are off." : "\(upcomingCount) upcoming class\(upcomingCount == 1 ? "" : "es") can trigger updates.",
+                        tint: isPaused ? AppTheme.secondaryText : AppTheme.blue
+                    )
 
-                StatusRow(
-                    systemImage: "exclamationmark.circle.fill",
-                    title: "Red cue",
-                    detail: "Turns red \(alertCueMinutes) min before class, after the \(leadMinutes) min island start.",
-                    tint: AppTheme.red
-                )
+                    ProfileRowDivider()
 
-                StatusRow(
-                    systemImage: automaticUpdates.systemImage,
-                    title: automaticUpdates.title,
-                    detail: automaticUpdates.detail,
-                    tint: automaticUpdates.tint
-                )
+                    StatusRow(
+                        systemImage: "exclamationmark",
+                        title: "Red cue",
+                        detail: "Turns red \(alertCueMinutes) min before class, after the \(leadMinutes) min island start.",
+                        tint: AppTheme.red
+                    )
+
+                    ProfileRowDivider()
+
+                    StatusRow(
+                        systemImage: automaticUpdates.systemImage,
+                        title: automaticUpdates.title,
+                        detail: automaticUpdates.detail,
+                        tint: automaticUpdates.tint
+                    )
+                }
+                .padding(.horizontal, 14)
+                .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 if !isPaused && !isReady {
                     SecondaryActionButton(
@@ -1856,11 +2346,12 @@ private struct StatusRow: View {
     let tint: Color
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .semibold, design: .default))
+                .font(.system(size: 13, weight: .bold, design: .default))
                 .foregroundStyle(tint)
-                .frame(width: 24, height: 24)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.12), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -1875,12 +2366,13 @@ private struct StatusRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.vertical, 13)
     }
 }
 
 private struct ScheduleListCard: View {
+    private static let visibleLimit = 12
+
     let events: [CourseEvent]
     let deleteAction: (CourseEvent) -> Void
     let clearAction: () -> Void
@@ -1892,13 +2384,26 @@ private struct ScheduleListCard: View {
             if events.isEmpty {
                 EmptyScheduleView()
             } else {
-                VStack(spacing: 10) {
-                    ForEach(events.prefix(12)) { event in
-                        SwipeToDeleteRow {
-                            ClassRow(event: event)
-                        } deleteAction: {
-                            deleteAction(event)
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(groupedEvents, id: \.day) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            ScheduleDayHeader(date: group.day, classCount: group.events.count)
+
+                            ForEach(group.events) { event in
+                                SwipeToDeleteRow {
+                                    ClassRow(event: event)
+                                } deleteAction: {
+                                    deleteAction(event)
+                                }
+                            }
                         }
+                    }
+
+                    if events.count > Self.visibleLimit {
+                        Text("Showing the next \(Self.visibleLimit) of \(events.count) classes")
+                            .font(OnboardingFont.medium(12))
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .frame(maxWidth: .infinity)
                     }
 
                     DestructiveActionButton(
@@ -1906,7 +2411,6 @@ private struct ScheduleListCard: View {
                         systemImage: "trash",
                         action: { isConfirmingClear = true }
                     )
-                    .padding(.top, 4)
                 }
             }
         }
@@ -1919,7 +2423,56 @@ private struct ScheduleListCard: View {
     }
 
     private var subtitle: String {
-        events.isEmpty ? "Your classes will appear here" : "\(events.count) upcoming classes"
+        events.isEmpty ? "Your classes will appear here" : "Swipe left on a class to delete it"
+    }
+
+    private var groupedEvents: [(day: Date, events: [CourseEvent])] {
+        let calendar = Calendar.current
+        let groups = Dictionary(grouping: events.prefix(Self.visibleLimit)) { calendar.startOfDay(for: $0.startTime) }
+        return groups.keys.sorted().map { day in
+            (day, groups[day, default: []].sorted { $0.startTime < $1.startTime })
+        }
+    }
+}
+
+private struct ScheduleDayHeader: View {
+    let date: Date
+    let classCount: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(OnboardingFont.semibold(12))
+                .tracking(0.8)
+                .textCase(.uppercase)
+                .foregroundStyle(isToday ? AppTheme.blue : AppTheme.navy)
+                .lineLimit(1)
+
+            Rectangle()
+                .fill(AppTheme.border.opacity(0.7))
+                .frame(height: 1)
+
+            Text("\(classCount)")
+                .font(OnboardingFont.semibold(11).monospacedDigit())
+                .foregroundStyle(isToday ? AppTheme.blue : AppTheme.secondaryText)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(isToday ? AppTheme.blue.opacity(0.10) : AppTheme.field, in: Capsule())
+        }
+        .padding(.horizontal, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(classCount) class\(classCount == 1 ? "" : "es")")
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var isToday: Bool {
+        Calendar.current.isDateInToday(date)
+    }
+
+    private var title: String {
+        if isToday { return "Today" }
+        if Calendar.current.isDateInTomorrow(date) { return "Tomorrow" }
+        return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
 }
 
@@ -2273,20 +2826,33 @@ private struct HorizontalSwipeGestureView: UIViewRepresentable {
 
 private struct EmptyScheduleView: View {
     var body: some View {
-        HStack(spacing: 10) {
+        VStack(spacing: 10) {
             Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 17, weight: .medium, design: .default))
+                .font(.system(size: 20, weight: .semibold, design: .default))
                 .foregroundStyle(AppTheme.blue)
+                .frame(width: 48, height: 48)
+                .background(AppTheme.blue.opacity(0.10), in: Circle())
 
-            Text("No classes added yet")
-                .font(OnboardingFont.regular(14))
-                .foregroundStyle(AppTheme.secondaryText)
+            VStack(spacing: 3) {
+                Text("No classes yet")
+                    .font(OnboardingFont.semibold(15))
+                    .foregroundStyle(AppTheme.primaryText)
 
-            Spacer(minLength: 0)
+                Text("Add a course or upload your ACORN timetable to see your week here.")
+                    .font(OnboardingFont.regular(13))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 22)
+        .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(AppTheme.border, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+        }
     }
 }
 
@@ -2294,71 +2860,89 @@ private struct ClassRow: View {
     let event: CourseEvent
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(event.courseCode)
-                    .font(OnboardingFont.semibold(16))
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.startTime.formatted(date: .omitted, time: .shortened))
+                    .font(OnboardingFont.semibold(14).monospacedDigit())
                     .foregroundStyle(AppTheme.navy)
-                    .lineLimit(1)
 
-                Text(eventSubtitle)
-                    .font(OnboardingFont.regular(13))
+                Text(event.endTime.formatted(date: .omitted, time: .shortened))
+                    .font(OnboardingFont.regular(12).monospacedDigit())
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .frame(width: 64, alignment: .leading)
+
+            Capsule()
+                .fill(accent)
+                .frame(width: 4, height: 38)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 7) {
+                    Text(event.courseCode)
+                        .font(OnboardingFont.semibold(16))
+                        .foregroundStyle(AppTheme.navy)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    if !meetingTag.isEmpty {
+                        Text(meetingTag)
+                            .font(OnboardingFont.semibold(10))
+                            .foregroundStyle(accent)
+                            .lineLimit(1)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(accent.opacity(0.12), in: Capsule())
+                    }
+                }
+
+                Label(locationText, systemImage: locationIcon)
+                    .labelStyle(CompactLabelStyle())
+                    .font(OnboardingFont.medium(12))
                     .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.85)
             }
 
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 5) {
-                Text(event.startTime.formatted(date: .abbreviated, time: .shortened))
-                    .font(OnboardingFont.medium(13))
-                    .foregroundStyle(AppTheme.primaryText)
-                    .multilineTextAlignment(.trailing)
-
-                if !trailingDetail.isEmpty {
-                    Text(trailingDetail)
-                        .font(OnboardingFont.medium(13))
-                        .foregroundStyle(AppTheme.blue)
-                        .lineLimit(1)
-                }
-            }
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(AppTheme.field, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private var eventSubtitle: String {
-        if event.deliveryMode == "Asynchronous" {
-            return [event.meetingType, event.section]
-                .filter { !$0.isEmpty }
-                .joined(separator: " ")
-        }
-
-        return [event.meetingType, event.section, event.deliveryMode]
+    private var meetingTag: String {
+        [event.meetingType, event.section]
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
 
-    private var eventLocation: String {
-        [event.building, event.roomNumber]
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+    private var accent: Color {
+        let type = event.meetingType.lowercased()
+        if type.hasPrefix("tut") { return AppTheme.teal }
+        if type.hasPrefix("lab") || type.hasPrefix("pra") { return AppTheme.amber }
+        if type.hasPrefix("sem") { return AppTheme.violet }
+        return AppTheme.blue
     }
 
-    private var trailingDetail: String {
-        if !eventLocation.isEmpty {
-            return eventLocation
+    private var locationText: String {
+        let room = [event.building, event.roomNumber]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        if !room.isEmpty {
+            return room
         }
 
+        return event.deliveryMode.isEmpty ? "No room" : event.deliveryMode
+    }
+
+    private var locationIcon: String {
         switch event.deliveryMode.trimmingCharacters(in: .whitespacesAndNewlines) {
-        case "Asynchronous":
-            return "Async"
-        case "Online":
-            return "Sync"
-        default:
-            return ""
+        case "Asynchronous": return "clock.fill"
+        case "Online": return "wifi"
+        default: return "location.fill"
         }
     }
 }
@@ -2504,6 +3088,26 @@ private enum AppTheme {
     static let deepNavy = Color(light: (0.0, 0.09, 0.20), dark: (0.88, 0.94, 1.0))
     static let blue = Color(light: (0.0, 0.42, 0.78), dark: (0.10, 0.50, 0.88))
     static let red = Color(light: (0.78, 0.16, 0.16), dark: (0.88, 0.28, 0.28))
+    static let teal = Color(light: (0.0, 0.52, 0.55), dark: (0.28, 0.76, 0.78))
+    static let amber = Color(light: (0.80, 0.48, 0.0), dark: (0.96, 0.68, 0.26))
+    static let violet = Color(light: (0.38, 0.30, 0.78), dark: (0.64, 0.57, 0.96))
+    static let islandRed = Color(red: 1.0, green: 0.36, blue: 0.34)
+    static let brandGradient = LinearGradient(
+        colors: [
+            Color(light: (0.24, 0.60, 0.97), dark: (0.10, 0.50, 0.88)),
+            Color(light: (0.06, 0.44, 0.87), dark: (0.0, 0.26, 0.56))
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    static let mutedBrandGradient = LinearGradient(
+        colors: [
+            Color(light: (0.24, 0.60, 0.97), dark: (0.06, 0.36, 0.66)),
+            Color(light: (0.06, 0.44, 0.87), dark: (0.0, 0.20, 0.43))
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
     static let cream = Color(light: (0.995, 0.985, 0.955), dark: (0.07, 0.09, 0.13))
     static let sky = Color(light: (0.84, 0.94, 0.99), dark: (0.08, 0.17, 0.28))
     static let background = Color(light: (0.975, 0.985, 0.995), dark: (0.04, 0.06, 0.10))

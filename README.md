@@ -165,11 +165,11 @@ ICS import has been removed. Existing saved schedules remain available. Uploadin
 
 UTime is built around local timetable use:
 
-- ✅ Student profile details **stay on device**.
-- ✅ Timetable image recognition **runs on-device**; the image is not uploaded for OCR.
-- ✅ Imported class data is used to power the app’s schedule and Live Activity views.
-- ✅ **No account is required** to import or view a timetable.
-- ✅ Live Activity support uses only the data needed to show class updates.
+- Student profile details **stay on device**.
+- Timetable image recognition **runs on-device**; the image is not uploaded for OCR.
+- Imported class data is used to power the app’s schedule and Live Activity views.
+- **No account is required** to import or view a timetable.
+- Live Activity support uses only the data needed to show class updates.
 
 Read the full privacy policy at [jamieryu.com/UTime/privacy](https://jamieryu.com/UTime/privacy/index.html).
 

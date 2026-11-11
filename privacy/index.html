@@ -100,32 +100,67 @@
 
   <header>
     <h1>UTime Privacy Policy</h1>
-    <p class="last-updated">Last updated: August 12, 2026</p>
+    <p class="last-updated">Last updated: November 11, 2026</p>
   </header>
 
   <main class="container">
-    <p>UTime helps students import an .ics timetable file and show upcoming class timing and room information through Live Activities, the Lock Screen, and Dynamic Island.</p>
+    <p>UTime helps students add their class timetable and see upcoming class timing and room information in the app, on the Lock Screen, and in the Dynamic Island.</p>
+
+    <h2>Adding Your Timetable</h2>
+    <p>You can add classes in three ways:</p>
+    <ul>
+      <li><strong>Calendar file:</strong> UTime reads an .ics file you choose.</li>
+      <li><strong>Timetable screenshot:</strong> UTime reads the text in a screenshot you pick, using Apple's on-device text recognition. The image is processed on your iPhone and is not uploaded or kept.</li>
+      <li><strong>Manual entry:</strong> you type in the class details yourself.</li>
+    </ul>
+    <p>UTime only sees the photos you choose. It does not access the rest of your photo library.</p>
 
     <h2>Information UTime Stores On Your Device</h2>
-    <p>UTime stores your imported schedule, app settings, and optional setup answers such as display name, campus, major, and year on your device so the app can show your upcoming classes.</p>
+    <p>UTime stores the following on your iPhone so the app can show your upcoming classes:</p>
+    <ul>
+      <li>Your class schedule (course code, meeting type, section, delivery mode, building, room, and times).</li>
+      <li>App settings, such as reminder timing.</li>
+      <li>Optional profile details you enter: display name, campus, program, year, and profile photo.</li>
+    </ul>
+    <p>Your profile details and profile photo stay on your iPhone and are never sent to our backend.</p>
 
     <h2>Information Sent To Our Backend</h2>
-    <p>To update Live Activities while the app is not open, UTime sends limited schedule and Live Activity data to our backend provider, Supabase. This may include course code, meeting type, section, delivery mode, building, room number, start time, end time, reminder settings, a random installation identifier, and the Live Activity push token issued by Apple.</p>
-    <p>This data is used only to deliver Live Activity updates, such as showing a countdown before class or ending the current Live Activity.</p>
+    <p>To start and update Live Activities while the app is closed, UTime sends limited data to our backend provider, Supabase:</p>
+    <ul>
+      <li>Upcoming class details: course code, meeting type, section, delivery mode, building, room number, start time, and end time.</li>
+      <li>Your reminder settings.</li>
+      <li>A random installation identifier created by the app. It is not linked to your name, Apple ID, or email.</li>
+      <li>Live Activity push tokens issued by Apple.</li>
+    </ul>
+    <p>This data is used only to deliver Live Activity updates, such as showing a countdown before class or ending the Live Activity when class is over.</p>
+
+    <h2>Other Connections</h2>
+    <p>UTime checks the App Store for a newer version of the app. This request only includes the app's identifier, not any information about you.</p>
 
     <h2>What UTime Does Not Do</h2>
     <ul>
       <li>UTime does not require an account.</li>
       <li>UTime does not sell your data.</li>
       <li>UTime does not use your data for advertising or tracking.</li>
+      <li>UTime does not include third-party analytics or advertising SDKs.</li>
       <li>UTime does not access your GPS location.</li>
     </ul>
 
-    <h2>Deleting Data</h2>
-    <p>You can delete imported classes in the app by clearing your schedule. Removing the app from your device deletes local app data. Live Activity backend records are used for short-term Live Activity delivery.</p>
+    <h2>Deleting Your Data</h2>
+    <ul>
+      <li><strong>In the app:</strong> clearing your schedule deletes it from your iPhone and removes the schedule copy from our backend.</li>
+      <li><strong>Deleting the app:</strong> removes all data stored on your iPhone.</li>
+      <li><strong>By email:</strong> to delete any remaining backend records, such as past Live Activity records, email us at the address below. Open Profile in UTime to find a link to this policy.</li>
+    </ul>
+
+    <h2>Children's Privacy</h2>
+    <p>UTime is a schedule tool for university students. It does not ask for your age and does not knowingly collect personal information from children.</p>
+
+    <h2>Changes To This Policy</h2>
+    <p>If this policy changes, the updated version will be posted on this page with a new "Last updated" date.</p>
 
     <h2>Contact</h2>
-    <p>For questions about this privacy policy, contact <a href="mailto:jamie.ryu07@gmail.com">jamie.ryu07@gmail.com</a>.</p>
+    <p>For questions about this privacy policy or to request data deletion, contact <a href="mailto:jamie.ryu07@gmail.com">jamie.ryu07@gmail.com</a>.</p>
 
     <h2>Affiliation</h2>
     <p>UTime is not affiliated with, endorsed by, or sponsored by the University of Toronto.</p>

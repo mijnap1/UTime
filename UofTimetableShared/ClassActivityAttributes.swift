@@ -102,65 +102,6 @@ struct ClassActivityAttributes: ActivityAttributes, Hashable {
             return "No room"
         }
 
-        var expandedLocationTitle: String {
-            if !physicalLocation.isEmpty {
-                return physicalLocation
-            }
-
-            if isAsynchronous {
-                return "Async"
-            }
-
-            if isOnline {
-                return "Online"
-            }
-
-            return "No room"
-        }
-
-        var expandedLocationSubtitle: String {
-            if !physicalLocation.isEmpty {
-                return deliveryLabel
-            }
-
-            if isAsynchronous {
-                return ""
-            }
-
-            if isOnline {
-                return "Remote"
-            }
-
-            return deliveryLabel
-        }
-
-        var expandedCourseSubtitle: String {
-            isAsynchronous ? "" : meetingCode
-        }
-
-        var expandedFooterText: String {
-            if isAsynchronous {
-                return meetingCode
-            }
-
-            return classTimeRange
-        }
-
-        var meetingSummary: String {
-            let meeting = [meetingType, section]
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-                .joined(separator: " ")
-
-            if isAsynchronous {
-                return meeting
-            }
-
-            return [meeting, deliveryMode.trimmingCharacters(in: .whitespacesAndNewlines)]
-                .filter { !$0.isEmpty }
-                .joined(separator: " • ")
-        }
-
         var meetingCode: String {
             [meetingType, section]
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -173,7 +114,7 @@ struct ClassActivityAttributes: ActivityAttributes, Hashable {
         }
 
         var classTimeRange: String {
-            "\(startTime.formatted(date: .omitted, time: .shortened)) - \(endTime.formatted(date: .omitted, time: .shortened))"
+            "\(startTime.formatted(date: .omitted, time: .shortened)) – \(endTime.formatted(date: .omitted, time: .shortened))"
         }
 
         func countdownTarget(now: Date = .now) -> Date {
@@ -182,22 +123,6 @@ struct ClassActivityAttributes: ActivityAttributes, Hashable {
             }
 
             return startTime
-        }
-
-        func phaseLabel(now: Date = .now) -> String {
-            if now >= startTime {
-                return "In class"
-            }
-
-            return "Starts in"
-        }
-
-        func timeSummary(now: Date = .now) -> String {
-            if now >= startTime {
-                return "Ends \(endTime.formatted(date: .omitted, time: .shortened))"
-            }
-
-            return "Starts \(startTime.formatted(date: .omitted, time: .shortened))"
         }
     }
 

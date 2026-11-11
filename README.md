@@ -72,12 +72,10 @@ Version `3.1` redesigns the Schedule and Alerts tabs to match the Today and Prof
 
 ## Screenshots
 
-> [!NOTE]
-> The images below and above show earlier app screens; the v3.1 screens are not pictured yet.
-
 <p align="center">
-  <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="45%">
-  <img src="docs/readme/dynamic-island.png" alt="UTime Dynamic Island compact class update" width="45%">
+  <img src="docs/readme/never-miss-next-class.png" alt="UTime welcome screen" width="31%">
+  <img src="docs/readme/lock-screen-updates.png" alt="UTime Lock Screen Live Activity" width="31%">
+  <img src="docs/readme/dynamic-island.png" alt="UTime Dynamic Island compact class update" width="31%">
 </p>
 
 UTime is designed around native iPhone surfaces instead of becoming another heavy calendar screen. The app keeps the main interface **calm**, then uses Lock Screen and Dynamic Island surfaces **when timing matters**.

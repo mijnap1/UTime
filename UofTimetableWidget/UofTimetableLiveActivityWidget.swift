@@ -17,17 +17,12 @@ struct UofTimetableLiveActivityWidget: Widget {
                     ExpandedCourseView(state: context.state)
                 }
 
-                DynamicIslandExpandedRegion(.center) {
-                    ExpandedTimerView(state: context.state)
-                }
-
                 DynamicIslandExpandedRegion(.trailing) {
-                    ExpandedRoomView(state: context.state)
+                    ExpandedTimerView(state: context.state)
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
                     ExpandedInfoRow(state: context.state)
-                        .padding(.top, 2)
                 }
             } compactLeading: {
                 CompactCountdownLeadingView(
@@ -48,290 +43,265 @@ private struct ExpandedCourseView: View {
     let state: ClassActivityAttributes.ContentState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(state.displayCourseCode)
-                .font(.system(size: 19, weight: .semibold, design: .default))
+                .font(.system(size: 22, weight: .semibold, design: .default))
                 .foregroundStyle(ActivityStyle.primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.68)
+                .minimumScaleFactor(0.7)
 
-            if !state.expandedCourseSubtitle.isEmpty {
-                Text(state.expandedCourseSubtitle)
-                    .font(.system(size: 12, weight: .medium, design: .default))
+            if !state.meetingCode.isEmpty {
+                Text(state.meetingCode)
+                    .font(.system(size: 13, weight: .medium, design: .default))
                     .foregroundStyle(ActivityStyle.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
         }
-        .frame(width: 122, alignment: .leading)
-        .padding(.leading, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 10)
+        .padding(.top, 6)
     }
 }
 
+/// Countdown on the right with a small label above it, like the Lock Screen card; it turns red once the red cue starts.
 private struct ExpandedTimerView: View {
     let state: ClassActivityAttributes.ContentState
 
     var body: some View {
-        VStack(spacing: 0) {
-            Text(state.phaseLabel())
-                .font(.system(size: 12, weight: .semibold, design: .default))
-                .foregroundStyle(ClassActivityTheme.color(for: state.countdownTarget()).accent)
-                .frame(width: 112, alignment: .center)
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let now = timeline.date
+            let target = state.countdownTarget(now: now)
+            let isInClass = now >= state.startTime
+            let isRedCue = !isInClass && now >= state.compactCueStart
 
-            ExpandedCountdownView(target: state.countdownTarget())
-                .frame(width: 112, alignment: .center)
-        }
-        .frame(width: 112, alignment: .center)
-    }
-}
-
-private struct ExpandedRoomView: View {
-    let state: ClassActivityAttributes.ContentState
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            Text(state.expandedLocationTitle)
-                .font(.system(size: 19, weight: .semibold, design: .default))
-                .foregroundStyle(ActivityStyle.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.68)
-
-            if !state.expandedLocationSubtitle.isEmpty {
-                Text(state.expandedLocationSubtitle)
-                    .font(.system(size: 12, weight: .medium, design: .default))
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(isInClass ? "ends in" : "starts in")
+                    .font(.system(size: 13, weight: .medium, design: .default))
                     .foregroundStyle(ActivityStyle.muted)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+
+                Group {
+                    if target > now {
+                        Text(timerInterval: now...target, countsDown: true)
+                    } else {
+                        Text("Now")
+                    }
+                }
+                .font(.system(size: 26, weight: .semibold, design: .default).monospacedDigit())
+                .foregroundStyle(isRedCue ? ActivityStyle.brightRed : ActivityStyle.primary)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             }
+            .frame(width: 104, alignment: .trailing)
+            .padding(.trailing, 10)
+            .padding(.top, 6)
         }
-        .frame(width: 122, alignment: .trailing)
-        .padding(.trailing, 20)
     }
 }
 
+/// Class progress, then the room and time underneath.
 private struct ExpandedInfoRow: View {
     let state: ClassActivityAttributes.ContentState
 
     var body: some View {
-        Text(state.expandedFooterText)
-            .font(.system(size: 12, weight: .medium, design: .default))
-            .foregroundStyle(ActivityStyle.muted)
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.horizontal, 28)
+        VStack(spacing: 10) {
+            if !state.isAsynchronous && state.endTime > state.startTime {
+                // Sits empty before class and fills on its own once class starts.
+                ProgressView(timerInterval: state.startTime...state.endTime, countsDown: false) {
+                    EmptyView()
+                } currentValueLabel: {
+                    EmptyView()
+                }
+                .progressViewStyle(.linear)
+                .tint(ActivityStyle.primary)
+                .labelsHidden()
+            }
+
+            HStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: state.locationIconName)
+                        .font(.system(size: 12, weight: .semibold, design: .default))
+                        .foregroundStyle(ActivityStyle.muted)
+
+                    Text(state.location)
+                        .font(.system(size: 15, weight: .semibold, design: .default))
+                        .foregroundStyle(ActivityStyle.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+
+                Spacer(minLength: 8)
+
+                if !state.isAsynchronous {
+                    Text(state.classTimeRange)
+                        .font(.system(size: 13, weight: .medium, design: .default).monospacedDigit())
+                        .foregroundStyle(ActivityStyle.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
     }
 }
 
+/// Lock Screen card in the app's "Up next" style: the countdown and the room lead, the rest stays quiet.
 private struct LockScreenClassActivityView: View {
     let context: ActivityViewContext<ClassActivityAttributes>
 
+    private var state: ClassActivityAttributes.ContentState { context.state }
+
+    /// Class type and delivery, e.g. "Lecture · In Person". Delivery is skipped when the room line already says it.
+    private var subtitle: String {
+        [state.meetingCode, state.physicalLocation.isEmpty ? "" : state.deliveryLabel]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { timeline in
-            let theme = ClassActivityTheme.color(
-                for: context.state.countdownTarget(now: timeline.date),
-                now: timeline.date
-            )
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let now = timeline.date
+            let isInClass = now >= state.startTime
+            let isRedCue = !isInClass && now >= state.compactCueStart
 
-            ZStack {
-                LockScreenActivityBackground()
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(state.displayCourseCode)
+                            .font(ActivityFont.demiBold(21))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
 
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(context.state.displayCourseCode)
-                                .font(.system(size: 23, weight: .semibold, design: .default))
-                                .foregroundStyle(ActivityStyle.primary)
+                        if !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(ActivityFont.regular(13))
+                                .foregroundStyle(.white.opacity(0.7))
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-
-                            Text(context.state.meetingSummary)
-                                .font(.system(size: 12, weight: .medium, design: .default))
-                                .foregroundStyle(ActivityStyle.muted)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
+                                .minimumScaleFactor(0.8)
                         }
-
-                        Spacer(minLength: 8)
-
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text(context.state.phaseLabel(now: timeline.date).uppercased())
-                                .font(.system(size: 11, weight: .bold, design: .default))
-                                .foregroundStyle(theme.accent)
-                                .tracking(0.6)
-
-                            LockScreenCountdownView(target: context.state.countdownTarget(now: timeline.date))
-                        }
-                        .frame(width: 118, alignment: .trailing)
                     }
 
-                    HStack(alignment: .center, spacing: 10) {
-                        HStack(spacing: 8) {
-                            Image(systemName: context.state.locationIconName)
-                                .font(.system(size: 12, weight: .bold, design: .default))
-                                .foregroundStyle(theme.accent)
+                    Spacer(minLength: 8)
 
-                            Text(context.state.location)
-                                .font(.system(size: 18, weight: .semibold, design: .default))
-                                .foregroundStyle(ActivityStyle.primary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(ActivityStyle.primary.opacity(0.075), in: Capsule())
-                        .overlay {
-                            Capsule()
-                                .stroke(.white.opacity(0.05), lineWidth: 1)
-                        }
+                    VStack(alignment: .trailing, spacing: -2) {
+                        Text(isInClass ? "ends in" : "starts in")
+                            .font(ActivityFont.regular(13))
+                            .foregroundStyle(.white.opacity(0.75))
 
-                        Spacer(minLength: 8)
-
-                        Text(context.state.timeSummary(now: timeline.date))
-                            .font(.system(size: 13, weight: .medium, design: .default))
-                            .foregroundStyle(ActivityStyle.muted)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
+                        countdown(now: now, isRedCue: isRedCue)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 15)
+
+                Spacer(minLength: 10)
+
+                // Room on the left, the short class time across from it under the countdown.
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    HStack(spacing: 6) {
+                        Image(systemName: state.locationIconName)
+                            .font(.system(size: 13, weight: .medium, design: .default))
+                            .foregroundStyle(.white.opacity(0.75))
+
+                        Text(state.location)
+                            .font(ActivityFont.medium(21))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .layoutPriority(1)
+
+                    Spacer(minLength: 8)
+
+                    if !state.isAsynchronous {
+                        Text(state.shortTimeRange)
+                            .font(ActivityFont.regular(13).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                    }
+                }
             }
-            .activityBackgroundTint(theme.background)
-            .activitySystemActionForegroundColor(theme.accent)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Painted here because the system tint alone lets the wallpaper show through.
+            .background(LockScreenActivityBackground())
+            .overlay(alignment: .bottomTrailing) {
+                Image(systemName: state.typeSymbolName)
+                    .font(.system(size: 76, weight: .semibold, design: .default))
+                    .foregroundStyle(.white.opacity(0.045))
+                    .offset(x: 14, y: 22)
+            }
+            .clipped()
         }
+        .activityBackgroundTint(ActivityStyle.uoftNavy)
+        .activitySystemActionForegroundColor(.white)
+    }
+
+    private func countdown(now: Date, isRedCue: Bool) -> some View {
+        let target = state.countdownTarget(now: now)
+
+        return Group {
+            if target > now {
+                Text(timerInterval: now...target, countsDown: true)
+            } else {
+                Text("0:00")
+            }
+        }
+        .font(ActivityFont.medium(32).monospacedDigit())
+        .tracking(-0.5)
+        .foregroundStyle(isRedCue ? ActivityStyle.brightRed : .white)
+        .multilineTextAlignment(.trailing)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+        // The timer text claims its widest width, so pin it to the right edge.
+        .frame(width: 100, alignment: .trailing)
     }
 }
 
+/// Quiet navy depth: a low-contrast fall from UofT navy, a faint light from the top right,
+/// a soft sheen and a fine highlight along the top edge, and a gentle shade in the bottom corner.
 private struct LockScreenActivityBackground: View {
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    ActivityStyle.cardSurfaceTop,
-                    ActivityStyle.softNavy,
-                    ActivityStyle.cardSurfaceBottom
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
+        LinearGradient(
+            colors: [ActivityStyle.uoftNavy, ActivityStyle.deepNavy],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .overlay {
             RadialGradient(
-                colors: [.white.opacity(0.055), .clear],
-                center: .topLeading,
-                startRadius: 18,
-                endRadius: 220
-            )
-
-            RadialGradient(
-                colors: [ActivityStyle.blue.opacity(0.10), .clear],
+                colors: [ActivityStyle.periwinkle.opacity(0.16), .clear],
                 center: .topTrailing,
-                startRadius: 12,
-                endRadius: 185
+                startRadius: 0,
+                endRadius: 340
             )
-
+        }
+        .overlay {
+            RadialGradient(
+                colors: [.black.opacity(0.22), .clear],
+                center: .bottomLeading,
+                startRadius: 0,
+                endRadius: 260
+            )
+        }
+        .overlay(alignment: .top) {
             LinearGradient(
-                colors: [.white.opacity(0.065), .clear, .black.opacity(0.08)],
+                colors: [.white.opacity(0.07), .clear],
                 startPoint: .top,
-                endPoint: .bottom
+                endPoint: .center
             )
         }
-    }
-}
-
-private struct LockScreenCountdownView: View {
-    let target: Date
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            if target > timeline.date {
-                Text(timerInterval: timeline.date...target, countsDown: true)
-                    .font(.system(size: 20, weight: .bold, design: .default).monospacedDigit())
-                    .foregroundStyle(ActivityStyle.primary)
-                    .multilineTextAlignment(.trailing)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                    .frame(width: 82, alignment: .trailing)
-            } else {
-                Text("NOW")
-                    .font(.system(size: 20, weight: .bold, design: .default))
-                    .foregroundStyle(ActivityStyle.primary)
-                    .lineLimit(1)
-                    .frame(width: 82, alignment: .trailing)
-            }
-        }
-    }
-}
-
-private struct CourseCodeView: View {
-    let state: ClassActivityAttributes.ContentState
-
-    var body: some View {
-        Text(state.displayCourseCode)
-            .font(.system(size: 17, weight: .semibold, design: .default))
-            .foregroundStyle(ActivityStyle.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-    }
-}
-
-private struct LocationView: View {
-    let state: ClassActivityAttributes.ContentState
-
-    var body: some View {
-        Label(state.location, systemImage: state.locationIconName)
-            .font(.system(size: 15, weight: .medium, design: .default))
-            .foregroundStyle(ActivityStyle.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-    }
-}
-
-private struct CountdownView: View {
-    let target: Date
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            if target > timeline.date {
-                Text(timerInterval: timeline.date...target, countsDown: true)
-                    .font(.system(size: 20, weight: .bold, design: .default).monospacedDigit())
-                    .foregroundStyle(ActivityStyle.primary)
-                    .multilineTextAlignment(.trailing)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                    .frame(width: 82, alignment: .trailing)
-            } else {
-                Text("NOW")
-                    .font(.system(size: 20, weight: .bold, design: .default))
-                    .foregroundStyle(ActivityStyle.primary)
-                    .lineLimit(1)
-                    .frame(width: 82, alignment: .trailing)
-            }
-        }
-    }
-}
-
-private struct ExpandedCountdownView: View {
-    let target: Date
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            if target > timeline.date {
-                Text(timerInterval: timeline.date...target, countsDown: true)
-                    .font(.system(size: 32, weight: .semibold, design: .default).monospacedDigit())
-                    .foregroundStyle(ActivityStyle.primary)
-                    .contentTransition(.numericText())
-                    .multilineTextAlignment(.center)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(width: 112, alignment: .center)
-            } else {
-                Text("NOW")
-                    .font(.system(size: 26, weight: .semibold, design: .default))
-                    .foregroundStyle(ActivityStyle.primary)
-                    .lineLimit(1)
-                    .frame(width: 112, alignment: .center)
-            }
+        .overlay(alignment: .top) {
+            // Light catching the top edge, strongest in the middle.
+            LinearGradient(
+                colors: [.clear, .white.opacity(0.28), .white.opacity(0.28), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 0.75)
         }
     }
 }
@@ -397,8 +367,8 @@ private struct CompactLocationView: View {
             .foregroundStyle(ActivityStyle.primary)
             .lineLimit(1)
             .minimumScaleFactor(0.68)
-            .frame(width: 54, height: 18, alignment: .trailing)
-            .offset(x: -1)
+            // Hugs the text so the room sits right beside the camera instead of floating out.
+            .frame(maxWidth: 54, minHeight: 18, maxHeight: 18, alignment: .leading)
     }
 }
 
@@ -436,21 +406,65 @@ private enum ClassActivityTheme {
 }
 
 private enum ActivityStyle {
-    static let navy = Color(red: 0.0, green: 0.16, blue: 0.36)
+    static let uoftNavy = Color(red: 0.118, green: 0.216, blue: 0.396)
+    static let deepNavy = Color(red: 0.055, green: 0.110, blue: 0.225)
+    static let periwinkle = Color(red: 0.470, green: 0.580, blue: 0.960)
     static let softNavy = Color(red: 0.010, green: 0.060, blue: 0.12)
-    static let cardTop = Color(red: 0.012, green: 0.095, blue: 0.18)
-    static let cardBottom = Color(red: 0.006, green: 0.045, blue: 0.10)
-    static let cardSurfaceTop = Color(red: 0.018, green: 0.074, blue: 0.135)
-    static let cardSurfaceBottom = Color(red: 0.006, green: 0.035, blue: 0.075)
     static let blue = Color(red: 0.0, green: 0.42, blue: 0.78)
     static let gold = Color(red: 0.98, green: 0.72, blue: 0.25)
     static let red = Color(red: 0.82, green: 0.16, blue: 0.20)
-    static let deepRed = Color(red: 0.22, green: 0.035, blue: 0.055)
+    static let brightRed = Color(red: 1.0, green: 0.42, blue: 0.40)
     static let primary = Color(red: 0.94, green: 0.96, blue: 0.98)
     static let muted = Color(red: 0.66, green: 0.70, blue: 0.76)
 }
 
+/// Same Avenir Next weights as the app's AppFont.
+private enum ActivityFont {
+    static func regular(_ size: CGFloat) -> Font {
+        .custom("AvenirNext-Regular", size: size)
+    }
+
+    static func medium(_ size: CGFloat) -> Font {
+        .custom("AvenirNext-Medium", size: size)
+    }
+
+    static func demiBold(_ size: CGFloat) -> Font {
+        .custom("AvenirNext-DemiBold", size: size)
+    }
+}
+
 private extension ClassActivityAttributes.ContentState {
+    /// Same class-type icons as the app's cards.
+    var typeSymbolName: String {
+        let type = meetingType.lowercased()
+        if type.hasPrefix("tut") { return "person.2.fill" }
+        if type.hasPrefix("lab") || type.hasPrefix("pra") { return "flask.fill" }
+        if type.hasPrefix("sem") { return "bubble.left.and.bubble.right.fill" }
+        return "graduationcap.fill"
+    }
+
+    /// Short class time, e.g. "9 – 11 AM", "9:30 – 11 AM" or "11 AM – 1 PM".
+    var shortTimeRange: String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.locale = .current
+
+        func clock(_ date: Date) -> String {
+            formatter.dateFormat = calendar.component(.minute, from: date) == 0 ? "h" : "h:mm"
+            return formatter.string(from: date)
+        }
+
+        func period(_ date: Date) -> String {
+            calendar.component(.hour, from: date) < 12 ? formatter.amSymbol : formatter.pmSymbol
+        }
+
+        if period(startTime) == period(endTime) {
+            return "\(clock(startTime)) – \(clock(endTime)) \(period(endTime))"
+        }
+
+        return "\(clock(startTime)) \(period(startTime)) – \(clock(endTime)) \(period(endTime))"
+    }
+
     var locationIconName: String {
         if isAsynchronous {
             return "clock.fill"

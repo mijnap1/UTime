@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 3.1" src="https://img.shields.io/badge/version-3.1-0A66C2?style=flat">
+  <img alt="Version 4.1" src="https://img.shields.io/badge/version-4.1-0A66C2?style=flat">
   <img alt="Platform iOS" src="https://img.shields.io/badge/platform-iOS-0A66C2?style=flat">
   <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-0A66C2?style=flat">
   <img alt="Live Activities" src="https://img.shields.io/badge/Live%20Activities-ready-0A66C2?style=flat">
@@ -45,27 +45,26 @@ The app is organized around a bottom navigation bar with four focused sections:
 
 ```mermaid
 flowchart LR
-    A["📷 ACORN PNG"] --> C["🔍 On-device review"]
-    B["⌨️ Manual entry"] --> C
-    C --> D[("📅 Your schedule<br/>stored on iPhone")]
-    D --> E["🏠 Today & Schedule"]
-    D --> F["⏱️ Alerts timing"]
-    F --> G["🔒 Lock Screen"]
-    F --> H["🏝️ Dynamic Island"]
+    A["ACORN PNG"] --> C["On-device review"]
+    B["Manual entry"] --> C
+    C --> D[("Your schedule<br/>stored on iPhone")]
+    D --> E["Today & Schedule"]
+    D --> F["Alerts timing"]
+    F --> G["Lock Screen"]
+    F --> H["Dynamic Island"]
 ```
 
-## ✨ v3.1 Highlights
+## What's New in 4.1
 
-Version `3.1` redesigns the Schedule and Alerts tabs to match the Today and Profile headers, polishes light mode, and adds in-app update prompts.
+Version `4.1` is a full visual refresh, from the first launch to the Lock Screen.
 
-| | What's new |
-| :-: | --- |
-| 📅 | **Redesigned Schedule:** A header card shows today’s date, a strip of the next seven days with a dot for each class, and counts for today, this week, and upcoming. **Add a course** and **Upload timetable** sit side by side as two tiles. |
-| 🗂️ | **Classes grouped by day:** Upcoming classes are listed under **Today**, **Tomorrow**, and dated headings. Each row shows the start and end time, a color-coded tag for lectures, tutorials, labs, and seminars, and the room or delivery mode. |
-| ⏱️ | **Redesigned Alerts:** A header card previews the Live Activity for your next class and shows a timeline of when the island appears, when the red cue starts, and when class begins. The timing controls and **Alert Status** are grouped into cleaner panels. |
-| ➕ | **Quick add on Today:** With no classes saved, the **Next Class** card offers the same **Add a course** and **Upload timetable** tiles as Schedule. |
-| ☀️ | **Light mode polish:** Blue accents are lighter in light mode, and the Live Activity preview uses a light card instead of solid black. Dark mode keeps its deeper blues and black island. |
-| 🔔 | **Update prompts:** When a newer UTime version is on the App Store, the app offers to open it. Choosing **Later** hides the prompt for 24 hours. |
+- **Welcome and setup.** A new welcome screen, then four short steps for your name, campus, program and year.
+- **Lock Screen.** A navy card with the course name up top, the countdown on the right, and the room and class time along the bottom.
+- **Dynamic Island.** The compact view shows the course and room beside the camera. The expanded view adds a progress bar, the room and the class time.
+- **Schedule.** A Monday to Sunday week view with arrows and a **Today** button. Dots show how many classes each day has, and each class shows an icon for its type.
+- **Alerts.** A ring shows when the island appears and when the timer turns red, with the next class underneath.
+- **Add and upload.** The **Add a course** and **Upload timetable** sheets share one cleaner layout.
+- **Privacy.** The privacy policy now covers exactly what is stored and how to delete it, and **Profile** links to it.
 
 > [!NOTE]
 > PNG import and manual entry remain available; **ICS import remains removed.**
@@ -82,16 +81,16 @@ UTime is designed around native iPhone surfaces instead of becoming another heav
 
 ## Core Features
 
-### 🏠 Today
+### Today
 
-The **Today** section is the main landing view. It highlights the next class with the **course code, section details, start time, date, and room** when one is available. Below that, the overview panel keeps the day readable with counts for classes today, upcoming classes, alert timing, and Dynamic Island status.
+The **Today** section is the main landing view. An **Up next** card shows the next class with its **course code, meeting type, time, room**, and how long until it starts. Below it, a week strip marks the days with classes, and tapping a day lists that day's classes.
 
 > [!TIP]
-> With no classes saved, the **Next Class** card shows the **Add a course** and **Upload timetable** tiles instead.
+> With no classes saved, Today shows the **Add a course** and **Upload timetable** buttons instead.
 
-### 📅 Schedule
+### Schedule
 
-The **Schedule** section opens with a seven-day strip and class counts, then lists upcoming classes grouped by day. **Swipe left on a class to delete it.**
+The **Schedule** section opens with a Monday to Sunday week you can page through, then lists the selected day's classes. **Swipe left on a class to delete it.**
 
 - **Add a course** manually, with term dates and weekly lecture, tutorial, lab, or seminar meetings. Review generated class dates and swipe to exclude holidays before saving. New courses are **appended** to the existing schedule.
 - **Upload timetable** scans an ACORN PNG from Files or Photos. Recognition runs **on-device**, and all extracted courses can be edited before saving.
@@ -99,13 +98,13 @@ The **Schedule** section opens with a seven-day strip and class counts, then lis
 > [!WARNING]
 > Saving an uploaded timetable **replaces your current schedule**. Use **Add a course** if you only want to add to it.
 
-### ⏱️ Alerts
+### Alerts
 
-The **Alerts** section controls how early UTime starts Live Activity updates before class. It also lets users choose a **red-alert cue**, so the app can become more noticeable as the start time gets closer. A preview at the top shows how the Live Activity will look for your next class, with a timeline of when the island appears and when the red cue starts.
+The **Alerts** section controls how early UTime starts Live Activity updates before class. It also lets users choose a **red-alert cue**, so the app can become more noticeable as the start time gets closer. A ring at the top shows both timings, with your next class underneath.
 
-### 👤 Profile
+### Profile
 
-The **Profile** section shows your name and campus in a hero card, with program, campus, year, and scheduled class count in one details card. It also includes a small **Rate UTime** row for users who want to leave an App Store review, without turning the page into a promotion screen.
+The **Profile** section shows your name, campus, program and year. From here you can edit your profile, rate UTime, read the privacy policy, or clear your schedule.
 
 ## Live Activities
 
@@ -113,18 +112,18 @@ UTime uses native iOS Live Activities to keep the next class visible when it mat
 
 | Surface | What you see |
 | --- | --- |
-| 🔒 **Lock Screen** | The course, room or delivery mode, countdown, and start time. |
-| 🏝️ **Dynamic Island** | A compact view focused on the course and room, with the course code tucked against the camera cutout. |
-| ⏱️ **Alert timing** | Adjustable, so updates appear before class instead of at the last second. |
-| 🔴 **Red-alert cues** | Make the final minutes before class easier to notice. |
+| **Lock Screen** | The course, meeting type, countdown, room, and class time. |
+| **Dynamic Island** | The course and room beside the camera; press and hold for a progress bar, room, and time. |
+| **Alert timing** | Adjustable, so updates appear before class instead of at the last second. |
+| **Red-alert cues** | Make the final minutes before class easier to notice. |
 
 The timeline below uses the defaults, both adjustable in **Alerts**:
 
 ```mermaid
 flowchart LR
-    A["🏝️ Island appears<br/><b>30 min before</b>"] --> B["🔴 Red cue<br/><b>5 min before</b>"]
-    B --> C["🎓 Class starts"]
-    C --> D["✅ Activity ends<br/>when class ends"]
+    A["Island appears<br/><b>30 min before</b>"] --> B["Red cue<br/><b>5 min before</b>"]
+    B --> C["Class starts"]
+    C --> D["Activity ends<br/>when class ends"]
 ```
 
 > [!IMPORTANT]
@@ -159,7 +158,7 @@ ICS import has been removed. Existing saved schedules remain available. Uploadin
 
 </details>
 
-## 🔐 Privacy and Data
+## Privacy and Data
 
 UTime is built around local timetable use:
 
@@ -173,7 +172,7 @@ Read the full privacy policy at [jamieryu.com/UTime/privacy](https://jamieryu.co
 
 ## Add a Timetable in the App
 
-### 📷 Upload an ACORN PNG
+### Upload an ACORN PNG
 
 1. Open **Schedule** and tap **Upload timetable**.
 2. Choose **Choose from Photos** or **Choose PNG from Files**. Include the entire grid with hour labels and the full Course / Day / Time / Location table; Safari bars are okay.
@@ -188,7 +187,7 @@ Read the full privacy policy at [jamieryu.com/UTime/privacy](https://jamieryu.co
 > [!TIP]
 > Uploading replaces your existing schedule, so **re-uploading never doubles your classes**.
 
-### ⌨️ Enter courses manually
+### Enter courses manually
 
 1. Open **Schedule** and tap **Add a course**.
 2. Enter the course, term dates, and weekly meetings. Use **Add another meeting** for additional days, tutorials, or labs.
@@ -204,10 +203,10 @@ Supabase checks due classes **every minute** and sends ActivityKit pushes throug
 
 ```mermaid
 sequenceDiagram
-    participant App as 📱 UTime app
-    participant SB as ☁️ Supabase
-    participant APNs as 🍎 APNs
-    participant LA as 🔒 Live Activity
+    participant App as UTime app
+    participant SB as Supabase
+    participant APNs as APNs
+    participant LA as Live Activity
     App->>SB: Sync upcoming classes and timing
     loop Every minute
         SB->>SB: Find classes that are due
@@ -224,7 +223,7 @@ The app retries temporary connection failures and resyncs when opened. In **Aler
 > [!WARNING]
 > **A successful sync or APNs response does not prove that iOS displayed the activity.** Test a class with the app in the background and the phone locked, checking its start, countdown cue, and end.
 
-## 🛠️ For Developers
+## For Developers
 
 ### Tech Stack
 
@@ -272,7 +271,7 @@ swiftc UofTimetable/CourseReminderSnapshot.swift UofTimetable/ManualCourse.swift
 
 Database regression checks are in `tests/backend-sync.sql`. They verify retry preservation, failure rollback, due filtering, and schedule clearing.
 
-⚠️ **Run the database checks with the migration loaded inside a transaction and always roll back.**
+**Run the database checks with the migration loaded inside a transaction and always roll back.**
 
 The image checks also accept the original sample PNG path as an argument to validate actual Vision output against the expected four courses and nine weekly meetings.
 
